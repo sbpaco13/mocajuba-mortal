@@ -2299,7 +2299,10 @@ function updEggs(dt) {
 const SFX = { ctx: null, master: null, on: true, eng: new Map(), loops: {}, nb: null, bb: null, birdT: 2 };
 try { SFX.on = localStorage.getItem('mm_som') !== '0'; } catch (e) { }
 function audioInit() {
-  if (SFX.ctx) { if (SFX.ctx.state !== 'running') SFX.ctx.resume(); return; }
+  if (SFX.ctx) {
+    if (SFX.ctx.state !== 'running') { SFX.ctx.resume().catch(() => { }); try { const s = SFX.ctx.createBufferSource(); s.buffer = SFX.ctx.createBuffer(1, 1, 22050); s.connect(SFX.ctx.destination); s.start(0); } catch (e) { } }
+    return;
+  }
   const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
   const ctx = SFX.ctx = new AC();
   const comp = ctx.createDynamicsCompressor(); comp.threshold.value = -14; comp.ratio.value = 4; comp.connect(ctx.destination);
@@ -2715,6 +2718,11 @@ function netJoin(code) {
   netConnect({ t: 'join', code, name: myName(), car: chosen });
 }
 function netBoot() {
+  // Áudio: o navegador só libera som depois de um toque. Qualquer toque/tecla reativa o som se ele
+  // ainda não começou (ex.: quem entrou pelo link e recarregou a cidade) ou se o celular o pausou.
+  const unlock = () => { if (!SFX.ctx || SFX.ctx.state !== 'running') audioInit(); };
+  for (const ev of ['pointerdown', 'touchend', 'keydown']) addEventListener(ev, unlock, { capture: true, passive: true });
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && SFX.ctx && SFX.ctx.state !== 'running') SFX.ctx.resume().catch(() => { }); });
   // controle de direção analógico (arrastar o polegar para os lados)
   const el = $('steer'), knob = el.querySelector('i'); let pid = null;
   const set = e => {
