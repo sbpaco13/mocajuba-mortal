@@ -78,4 +78,4 @@ npm start
 Abra **http://localhost:3000** no navegador. Celulares na mesma rede Wi-Fi podem entrar pelo IP do computador (ex.: `http://192.168.0.10:3000`).
 
 ---
-Mapa: © colaboradores do OpenStreetMap (ODbL). Gráficos 3D: three.js (licença MIT, em `public/vendor/three/LICENSE`).
+Mapa: © colaboradores do OpenStreetMap (ODbL). Som do motor: gravação "car throttle static" de tanweraman (Pixabay, Licença de Conteúdo Pixabay). Gráficos 3D: three.js (licença MIT, em `public/vendor/three/LICENSE`).
