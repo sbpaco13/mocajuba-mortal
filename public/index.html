@@ -205,6 +205,7 @@ kbd{background:rgba(255,255,255,.14);border-radius:4px;padding:1px 6px;font-fami
   <h1 id="end-title">FIM</h1>
   <table id="end-table"></table>
   <button class="btn" id="again">JOGAR DE NOVO</button>
+  <button class="btn2" id="tomenu" style="margin-top:14px">Menu principal</button>
 </div>
 
 <script type="importmap">
@@ -2370,38 +2371,69 @@ function startLoops() {
   const lfo = ctx.createOscillator(); lfo.frequency.value = 28; const lg = ctx.createGain(); lg.gain.value = .012; lfo.connect(lg); lg.connect(cic.g.gain); lfo.start();
   SFX.loops.cic = cic;
 }
-function engineFor(c) {
-  let e = SFX.eng.get(c); if (e) return e;
-  const ctx = SFX.ctx, ev = c.def.style === 'eletrico';
-  const o1 = ctx.createOscillator(), o2 = ctx.createOscillator(); o1.type = ev ? 'sine' : 'sawtooth'; o2.type = ev ? 'sine' : 'triangle';
-  const f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 300; f.Q.value = ev ? .5 : .4;
+// ---- motor a combustão: síntese de 4 cilindros (pulsos de combustão + ressonância do escapamento + ruído pulsado) ----
+function enginePW(ctx) {
+  if (SFX.pw && SFX.pw.ctx === ctx) return SFX.pw.w;
+  const N = 64, re = new Float32Array(N), im = new Float32Array(N);
+  for (let n = 1; n < N; n++) im[n] = Math.pow(n, -.55) * (1 + .35 * Math.cos(n * 1.7));
+  const w = ctx.createPeriodicWave(re, im); SFX.pw = { ctx, w }; return w;
+}
+function buildEngine(ctx, dest, ev, noise) {
   const g = ctx.createGain(); g.gain.value = 0;
   const p = ctx.createStereoPanner ? ctx.createStereoPanner() : null;
-  o1.connect(f); o2.connect(f); f.connect(g); if (p) { g.connect(p); p.connect(SFX.master); } else g.connect(SFX.master);
-  o1.start(); o2.start();
-  let o3 = null;
-  if (MOBILE_A) {   // celular: alto-falante pequeno não reproduz o grave do motor, então soma um harmônico mais agudo
-    o3 = ctx.createOscillator(); o3.type = ev ? 'sine' : 'sawtooth';
-    const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = ev ? 520 : 700; bp.Q.value = .8;
-    const g3 = ctx.createGain(); g3.gain.value = ev ? .9 : .55; o3.connect(bp); bp.connect(g3); g3.connect(g); o3.start();
+  if (p) { g.connect(p); p.connect(dest); } else g.connect(dest);
+  const osc = (type, f) => { const o = ctx.createOscillator(); if (type) o.type = type; o.frequency.value = f; return o; };
+  const filt = (type, f, q, gain) => { const b = ctx.createBiquadFilter(); b.type = type; b.frequency.value = f; b.Q.value = q; if (gain != null) b.gain.value = gain; return b; };
+  if (ev) {   // elétrico: zumbido brando e grave (o mesmo de antes)
+    const o1 = osc('sine', 70), o2 = osc('sine', 105), f = filt('lowpass', 300, .5);
+    o1.connect(f); o2.connect(f); f.connect(g); o1.start(); o2.start();
+    return { ev: true, o1, o2, f, g, p, oscs: [o1, o2], srcs: [] };
   }
-  e = { o1, o2, o3, f, g, p, ev }; SFX.eng.set(c, e); return e;
+  const fire = osc(null, 28); fire.setPeriodicWave(enginePW(ctx));        // pulsos de combustão (2 por volta)
+  const sub = osc('sawtooth', 14), subG = ctx.createGain(); subG.gain.value = .3;   // meia ordem: cilindros desiguais
+  const pre = ctx.createGain(); pre.gain.value = .7;
+  const sh = ctx.createWaveShaper(), cv = new Float32Array(1024);
+  for (let i = 0; i < 1024; i++) { const x = i / 511.5 - 1; cv[i] = Math.tanh(2.2 * x) / Math.tanh(2.2); }
+  sh.curve = cv; sh.oversample = '2x';
+  const lp = filt('lowpass', 700, .7), ex1 = filt('peaking', 90, 1.1, 10), ex2 = filt('peaking', 260, 1.4, 4), hs = filt('highshelf', 2200, .7, -14);
+  fire.connect(pre); sub.connect(subG); subG.connect(pre); pre.connect(sh); sh.connect(lp); lp.connect(ex1); ex1.connect(ex2); ex2.connect(hs); hs.connect(g);
+  // ar do escapamento: ruído que "bate" no ritmo da combustão
+  const nz = ctx.createBufferSource(); nz.buffer = noise; nz.loop = true;
+  const nbp = filt('bandpass', 420, .8), nG = ctx.createGain(); nG.gain.value = .05;
+  const lfo = osc('sawtooth', 28), lfoG = ctx.createGain(); lfoG.gain.value = .05; lfo.connect(lfoG); lfoG.connect(nG.gain);
+  nz.connect(nbp); nbp.connect(nG); nG.connect(lp);
+  fire.start(); sub.start(); lfo.start(); nz.start();
+  return { ev: false, fire, sub, lfo, lp, nG, lfoG, g, p, oscs: [fire, sub, lfo], srcs: [nz] };
 }
-function stopEngine(c) { const e = SFX.eng.get(c); if (!e) return; const t = SFX.ctx.currentTime; e.g.gain.setTargetAtTime(0, t, .1); e.o1.stop(t + .6); e.o2.stop(t + .6); if (e.o3) e.o3.stop(t + .6); SFX.eng.delete(c); }
+function setEngine(e, sp, thr, t, T, sput) {
+  if (e.ev) {
+    const freq = 70 + sp * 5;
+    e.o1.frequency.setTargetAtTime(freq, t, T); e.o2.frequency.setTargetAtTime(freq * 1.5, t, T); e.f.frequency.setTargetAtTime(260 + sp * 4, t, T);
+    return .012 + sp / 40 * .016;
+  }
+  const GEAR = 9, gear = Math.min(4, Math.floor(sp / GEAR)), frac = (sp - gear * GEAR) / GEAR;
+  let rpm = gear === 0 ? 850 + frac * 4700 : 2400 + frac * 3400;          // marchas: o giro cai a cada troca
+  rpm += thr * (sp < 2 ? 1500 : 250); if (sput) rpm *= .8; rpm = Math.min(6600, rpm);
+  const f = rpm / 30, load = thr;
+  e.fire.frequency.setTargetAtTime(f, t, T); e.sub.frequency.setTargetAtTime(f / 2, t, T); e.lfo.frequency.setTargetAtTime(f, t, T);
+  e.lp.frequency.setTargetAtTime(380 + load * 1100 + rpm * .1, t, T);
+  const nzl = .03 + load * .12; e.nG.gain.setTargetAtTime(nzl, t, T); e.lfoG.gain.setTargetAtTime(nzl, t, T);
+  return .075 + load * .05 + Math.min(1, sp / 40) * .03;
+}
+function engineFor(c) {
+  let e = SFX.eng.get(c); if (e) return e;
+  e = buildEngine(SFX.ctx, SFX.master, c.def.style === 'eletrico', SFX.nb); SFX.eng.set(c, e); return e;
+}
+function stopEngine(c) { const e = SFX.eng.get(c); if (!e) return; const t = SFX.ctx.currentTime; e.g.gain.setTargetAtTime(0, t, .1); for (const o of [...e.oscs, ...e.srcs]) o.stop(t + .6); SFX.eng.delete(c); }
 function updAudio(dt) {
   if (!SFX.ctx || SFX.ctx.state !== 'running') return;
-  const t = SFX.ctx.currentTime, T = .06, inGame = state !== 'menu', GEAR = 9;
+  const t = SFX.ctx.currentTime, T = .06, inGame = state === 'count' || state === 'play' || state === 'ending';
   for (const c of cars) {
     if (!c.alive || !inGame) { stopEngine(c); continue; }
     const sp = Math.abs(c.speed), s = spatial(c.x, c.z), mine = c === camTarget();
     if (s.g < .01 && !mine) { stopEngine(c); continue; }
     const e = engineFor(c), thr = Math.max(0, c.thr || 0);
-    let freq;
-    if (e.ev) freq = 70 + sp * 5;                                                   // elétrico: ruído brando e grave
-    else { const gear = Math.min(5, Math.floor(sp / GEAR)), frac = (sp - gear * GEAR) / GEAR; freq = 34 + (gear ? 18 : 0) + frac * 38 + thr * 5 + (c.sputT > 0 ? -12 : 0); }
-    e.o1.frequency.setTargetAtTime(freq, t, T); if (e.o3) e.o3.frequency.setTargetAtTime(freq * (e.ev ? 3 : 6), t, T); e.o2.frequency.setTargetAtTime(e.ev ? freq * 1.5 : freq * .5, t, T);
-    e.f.frequency.setTargetAtTime(e.ev ? 260 + sp * 4 : 160 + thr * 260 + sp * 5, t, T);
-    const vol = (e.ev ? .012 + sp / 40 * .016 : .06 + thr * .05 + sp / 40 * .03) * (mine ? 1 : .8) * (mine ? 1 : s.g) * (c.sputT > 0 ? .4 : 1);
+    const vol = setEngine(e, sp, thr, t, T, c.sputT > 0) * (mine ? 1 : .8) * (mine ? 1 : s.g) * (c.sputT > 0 ? .4 : 1);
     e.g.gain.setTargetAtTime(vol, t, T); if (e.p) e.p.pan.setTargetAtTime(mine ? 0 : s.pan, t, T);
   }
   for (const c of [...SFX.eng.keys()]) if (!cars.includes(c)) stopEngine(c);
@@ -2498,6 +2530,28 @@ function loop() {
 window.__dbg = () => cars.map(c => [c.name, c.alive, c.x | 0, c.z | 0, c.speed.toFixed(1), c.hp | 0, c.ai.target && c.ai.target.name, c.ai.path && c.ai.path.length, c.ai.revT.toFixed(1)].join(' '));
 window.__egg = () => ({ EGG, GHOST, PORTAL, SIGN_G, ACAI });
 window.__acaiTex = acaiTex;
+window.__engineDemo = async (ev) => {
+  const sr = 44100, dur = 11, oc = new OfflineAudioContext(1, sr * dur, sr);
+  const nb = oc.createBuffer(1, sr * 2, sr), d = nb.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+  const comp = oc.createDynamicsCompressor(); comp.threshold.value = -14; comp.ratio.value = 4; comp.connect(oc.destination);
+  const m = oc.createGain(); m.gain.value = 3; m.connect(comp);
+  const e = buildEngine(oc, m, ev, nb);
+  let sp = 0;
+  for (let k = 0; k < dur * 50; k++) {
+    const t = k / 50; let thr = 0;
+    if (t > 1.2 && t < 1.6) thr = 1;                  // acelerada parado
+    else if (t > 2.6 && t < 9) { thr = 1; sp = Math.min(40, sp + (sp < 9 ? 8 : sp < 18 ? 5.5 : sp < 27 ? 4 : 3) / 50); }
+    else if (t >= 9) sp = Math.max(0, sp - 6 / 50);
+    const v = setEngine(e, sp, thr, t, .06, false); e.g.gain.setTargetAtTime(v, t, .06);
+  }
+  const buf = await oc.startRendering(), x = buf.getChannelData(0), n = x.length, ab = new ArrayBuffer(44 + n * 2), dv = new DataView(ab);
+  const ws = (o, str) => { for (let i = 0; i < str.length; i++) dv.setUint8(o + i, str.charCodeAt(i)); };
+  ws(0, 'RIFF'); dv.setUint32(4, 36 + n * 2, true); ws(8, 'WAVEfmt '); dv.setUint32(16, 16, true); dv.setUint16(20, 1, true); dv.setUint16(22, 1, true);
+  dv.setUint32(24, sr, true); dv.setUint32(28, sr * 2, true); dv.setUint16(32, 2, true); dv.setUint16(34, 16, true); ws(36, 'data'); dv.setUint32(40, n * 2, true);
+  for (let i = 0; i < n; i++) dv.setInt16(44 + i * 2, Math.max(-1, Math.min(1, x[i])) * 32767, true);
+  let bin = ''; const u8 = new Uint8Array(ab); for (let i = 0; i < u8.length; i += 32768) bin += String.fromCharCode.apply(null, u8.subarray(i, i + 32768));
+  return btoa(bin);
+};
 window.__sfx = () => ({ state: SFX.ctx && SFX.ctx.state, engines: SFX.eng.size, on: SFX.on });
 window.__mapDbg = { sdf, cls, G, B, inBounds, gN };
 window.__carDbg = { buildCarMesh, CARS, THREE, RoomEnvironment, impactAt, wreck, debris, updDebris, pl: () => player };
@@ -2743,6 +2797,7 @@ function netBoot() {
   $('onl-join').onclick = () => { audioInit(); goFull(); netJoin($('onl-code').value); };
   $('onl-code').addEventListener('keydown', e => { if (e.key === 'Enter') $('onl-join').click(); });
   $('onl-leave').onclick = netLeave;
+  $('tomenu').onclick = () => { netLeave(); $('end').classList.add('hidden'); $('hud').classList.add('hidden'); clearMatch(); state = 'menu'; $('menu').classList.remove('hidden'); };
   $('onl-start').onclick = () => { audioInit(); goFull(); netStartClick(); };
   $('onl-total').onchange = netRenderRoster;
   $('onl-share').onclick = async () => {
@@ -2824,7 +2879,7 @@ function showEnd() {
   $('end-title').innerHTML = w ? (w.isPlayer ? 'VOCÊ <span>VENCEU</span>' : `${w.name} <span>VENCEU</span>`) : 'EMPATE';
   $('end-table').innerHTML = '<tr><td>#</td><td>Piloto</td><td>Carro</td><td>Eliminações</td></tr>' + order.map((c, i) => `<tr class="${c.isPlayer ? 'me' : ''}"><td>${i + 1}º</td><td>${c.name}</td><td>${c.def.name}</td><td>${c.kills}</td></tr>`).join('');
   $('end').classList.remove('hidden'); $('touch').classList.add('hidden'); document.body.classList.remove('playing');
-  $('again').textContent = NET.on ? 'VOLTAR À SALA' : 'JOGAR DE NOVO';
+  $('again').textContent = NET.on ? 'VOLTAR À SALA' : 'JOGAR DE NOVO'; $('tomenu').classList.toggle('hidden', !NET.on);
   if (NET.on && NET.isHost()) netSend({ t: 'lobby' });
 }
 $('start').onclick = () => { audioInit(); goFull(); startMatch(); };
