@@ -1646,6 +1646,12 @@ const SPOTS = [
   ['Cemitério', 309, 253], ['Posto Bacuri', -46, 583], ['Rua 15 de Novembro', 95, 342], ['Trav. Teófilo Otoni', 464, -79],
   ['Rua do Lago', 512, -706], ['Instituto N. Sra. das Graças', 178, 86], ['Rua Manoel de S. Furtado', 448, 111]
 ].map(([n, x, z]) => { const [sx, sz] = snapFree(x, z); return { n, x: sx, z: sz }; });
+{ // mais pontos de arma espalhados pela cidade (sorteio pela semente: mesmos lugares em todos os celulares)
+  const rnd = mulberry32(SEED * 7 + 13);
+  const nodes = gN.map((n, i) => i).filter(i => inBounds(gN[i].x, gN[i].z) && sdfAt(gN[i].x, gN[i].z) > 3.5 && !waterAt(gN[i].x, gN[i].z));
+  for (let k = nodes.length - 1; k > 0; k--) { const j = rnd() * (k + 1) | 0; [nodes[k], nodes[j]] = [nodes[j], nodes[k]]; }
+  for (const i of nodes) { if (SPOTS.length >= 34) break; const nd = gN[i]; if (SPOTS.every(q => Math.hypot(q.x - nd.x, q.z - nd.z) > 75)) SPOTS.push({ n: streetName(nd.x, nd.z) || 'Ruas de Mocajuba', x: nd.x, z: nd.z }); }
+}
 $('legend').innerHTML = Object.values(ITEMS).map(i => `<span><em style="background:${i.color}"></em>${i.icon} ${i.label}</span>`).join('') + '<span><em style="background:#d4232a;border-radius:50%"></em>🍇 Placa de açaí (+vida)</span>';
 
 function labelSprite() {
@@ -2666,20 +2672,13 @@ function netRenderRoster() {
   $('onl-roster').innerHTML = h;
   $('onl-hostctl').classList.toggle('hidden', !host); $('onl-wait').classList.toggle('hidden', host);
 }
-function computeSpawns(n) {
-  const cand = gN.map((nd, i) => i).filter(i => gN[i].e.length >= 1 && inBounds(gN[i].x, gN[i].z) && sdfAt(gN[i].x, gN[i].z) > 3.5 && gN[i].x > -40).sort(() => Math.random() - .5);
-  for (const sep of [110, 85, 60, 40, 20]) {
-    const sp = [];
-    for (const i of cand) { const nd = gN[i]; if (sp.every(s => Math.hypot(s[0] - nd.x, s[1] - nd.z) > sep)) { const nb = gN[nd.e[0][0]]; sp.push([+nd.x.toFixed(2), +nd.z.toFixed(2), +Math.atan2(nb.x - nd.x, nb.z - nd.z).toFixed(3)]); } if (sp.length >= n) return sp; }
-  }
-  return null;
-}
+function computeSpawns(n) { return pickSpawns(n); }
 function netStartClick() {
   if (!NET.isHost()) return;
   const total = Math.max(NET.players.length, +$('onl-total').value);
   const spawns = computeSpawns(total); if (!spawns) return netMsg('Não achei lugares para todos os carros nesta cidade.');
   const names = [...BOT_NAMES].sort(() => Math.random() - .5);
-  const plan = { seed: SEED, cars: [], items: pickups.map(() => pick(ITEM_POOL)) };
+  const plan = { seed: SEED, cars: [], items: startItems(spawns.slice(0, total)) };
   NET.players.forEach((p, i) => plan.cars.push({ id: p.id, owner: p.id, human: 1, key: CARS[p.car] ? p.car : 'eletrico', name: p.name, x: spawns[i][0], z: spawns[i][1], h: spawns[i][2] }));
   for (let i = NET.players.length; i < total; i++) plan.cars.push({ id: 'b' + i, owner: NET.me, key: pick(CAR_KEYS), name: names[i % names.length], x: spawns[i][0], z: spawns[i][1], h: spawns[i][2] });
   netSend({ t: 'start', plan });
@@ -2840,7 +2839,7 @@ function netBoot() {
     netMsg(`Você foi convidado para a sala <b>${q.toUpperCase()}</b>: escolha seu carro, confira seu nome e toque em <b>Entrar na sala</b>.`);
   }
 }
-window.__netDbg = { go: () => { countT = .01; }, NET, cars: () => cars, player: () => player, damage, keys, touch, st: () => state, pickups };
+window.__netDbg = { pk: () => pickups.map(p => [p.n, p.x | 0, p.z | 0, p.item, p.active]), go: () => { countT = .01; }, NET, cars: () => cars, player: () => player, damage, keys, touch, st: () => state, pickups };
 
 /* ============================ MENU / PARTIDA ============================ */
 let chosen = 'eletrico';
@@ -2875,16 +2874,30 @@ function clearMatch() {
   for (const k in pools) for (const p of pools[k]) { p.on = false; p.m.visible = false; }
   $('feed').innerHTML = '';
 }
+function nearPick(x, z) { let b = 1e9; for (const p of pickups) b = Math.min(b, Math.hypot(p.x - x, p.z - z)); return b; }
+function pickSpawns(n) {   // cada carro nasce a 12–55 m de um ponto de arma
+  const base = gN.map((nd, i) => i).filter(i => gN[i].e.length >= 1 && inBounds(gN[i].x, gN[i].z) && sdfAt(gN[i].x, gN[i].z) > 3.5 && gN[i].x > -40).sort(() => Math.random() - .5);
+  const near = base.filter(i => { const d = nearPick(gN[i].x, gN[i].z); return d > 12 && d < 55; });
+  for (const cand of [near, base]) for (const sep of [110, 85, 60, 40, 20]) {
+    const sp = [];
+    for (const i of cand) { const nd = gN[i]; if (sp.every(q => Math.hypot(q[0] - nd.x, q[1] - nd.z) > sep)) { const nb = gN[nd.e[0][0]]; sp.push([+nd.x.toFixed(2), +nd.z.toFixed(2), +Math.atan2(nb.x - nd.x, nb.z - nd.z).toFixed(3)]); } if (sp.length >= n) return sp; }
+  }
+  return null;
+}
+function startItems(spawns) {   // itens iniciais; o ponto mais perto de cada carro começa com uma arma
+  const items = pickups.map(() => pick(ITEM_POOL));
+  for (const [x, z] of spawns) { let bi = 0, bd = 1e9; pickups.forEach((p, i) => { const d = Math.hypot(p.x - x, p.z - z); if (d < bd) { bd = d; bi = i; } }); items[bi] = pick(['metralhadora', 'foguete', 'minas']); }
+  return items;
+}
 function startMatch() {
   clearMatch();
   const nb = +$('nbots').value, name = ($('pname').value || 'Você').trim();
-  const cand = gN.map((n, i) => i).filter(i => gN[i].e.length >= 1 && inBounds(gN[i].x, gN[i].z) && sdfAt(gN[i].x, gN[i].z) > 3.5 && gN[i].x > -40).sort(() => Math.random() - .5);
-  const spawns = []; for (const i of cand) { const n = gN[i]; if (spawns.every(s => Math.hypot(s[0] - n.x, s[1] - n.z) > 110)) { const nb = gN[n.e[0][0]]; spawns.push([n.x, n.z, Math.atan2(nb.x - n.x, nb.z - n.z)]); } if (spawns.length > nb + 1) break; }
+  const spawns = pickSpawns(nb + 1);
   const names = [...BOT_NAMES].sort(() => Math.random() - .5);
   const sp0 = spawns[0];
   player = createCar(chosen, name, true, sp0[0], sp0[1], sp0[2]);
   for (let i = 0; i < nb; i++) { const s = spawns[i + 1]; createCar(pick(CAR_KEYS), names[i], false, s[0], s[1], s[2]); }
-  pickups.forEach(p => setPickup(p, pick(ITEM_POOL)));
+  const its = startItems(spawns); pickups.forEach((p, i) => setPickup(p, its[i]));
   setupEggs();
   camera.position.set(player.x - Math.sin(player.h) * 9, 4, player.z - Math.cos(player.h) * 9);
   camLook.set(player.x, 1, player.z);
