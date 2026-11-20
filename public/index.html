@@ -2298,20 +2298,20 @@ function updEggs(dt) {
 /* ============================ ÁUDIO (todo sintetizado no navegador, sem arquivos) ============================ */
 const SFX = { ctx: null, master: null, on: true, eng: new Map(), loops: {}, nb: null, bb: null, birdT: 2 };
 try { SFX.on = localStorage.getItem('mm_som') !== '0'; } catch (e) { }
+const MOBILE_A = matchMedia('(pointer:coarse)').matches;
+function audioKick() { try { const s = SFX.ctx.createBufferSource(); s.buffer = SFX.ctx.createBuffer(1, 1, 22050); s.connect(SFX.ctx.destination); s.start(0); } catch (e) { } }
 function audioInit() {
-  if (SFX.ctx) {
-    if (SFX.ctx.state !== 'running') { SFX.ctx.resume().catch(() => { }); try { const s = SFX.ctx.createBufferSource(); s.buffer = SFX.ctx.createBuffer(1, 1, 22050); s.connect(SFX.ctx.destination); s.start(0); } catch (e) { } }
-    return;
-  }
+  if (SFX.ctx) { if (SFX.ctx.state !== 'running') { const r = SFX.ctx.resume(); if (r && r.catch) r.catch(() => { }); audioKick(); } return; }
   const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
-  const ctx = SFX.ctx = new AC();
+  try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (e) { }   // iPhone: toca mesmo com a chave de silencioso
+  const ctx = SFX.ctx = new AC(); audioKick();
   const comp = ctx.createDynamicsCompressor(); comp.threshold.value = -14; comp.ratio.value = 4; comp.connect(ctx.destination);
-  SFX.master = ctx.createGain(); SFX.master.gain.value = SFX.on ? .8 : 0; SFX.master.connect(comp);
+  SFX.master = ctx.createGain(); SFX.master.gain.value = SFX.on ? (MOBILE_A ? 1 : .8) : 0; SFX.master.connect(comp);
   const mk = (len, brown) => { const b = ctx.createBuffer(1, ctx.sampleRate * len, ctx.sampleRate), d = b.getChannelData(0); let last = 0; for (let i = 0; i < d.length; i++) { const w = Math.random() * 2 - 1; if (brown) { last = (last + .02 * w) / 1.02; d[i] = last * 3.5; } else d[i] = w; } return b; };
   SFX.nb = mk(2, false); SFX.bb = mk(4, true);
   startLoops();
 }
-function setSound(on) { SFX.on = on; try { localStorage.setItem('mm_som', on ? '1' : '0'); } catch (e) { } if (SFX.master) SFX.master.gain.setTargetAtTime(on ? .8 : 0, SFX.ctx.currentTime, .05); $('snd').textContent = on ? '🔊' : '🔇'; }
+function setSound(on) { SFX.on = on; try { localStorage.setItem('mm_som', on ? '1' : '0'); } catch (e) { } if (SFX.master) SFX.master.gain.setTargetAtTime(on ? (MOBILE_A ? 1 : .8) : 0, SFX.ctx.currentTime, .05); $('snd').textContent = on ? '🔊' : '🔇'; }
 const _cd = new THREE.Vector3();
 function spatial(x, z) {
   const dx = x - camera.position.x, dz = z - camera.position.z, d = Math.hypot(dx, dz);
@@ -2379,9 +2379,15 @@ function engineFor(c) {
   const p = ctx.createStereoPanner ? ctx.createStereoPanner() : null;
   o1.connect(f); o2.connect(f); f.connect(g); if (p) { g.connect(p); p.connect(SFX.master); } else g.connect(SFX.master);
   o1.start(); o2.start();
-  e = { o1, o2, f, g, p, ev }; SFX.eng.set(c, e); return e;
+  let o3 = null;
+  if (MOBILE_A) {   // celular: alto-falante pequeno não reproduz o grave do motor, então soma um harmônico mais agudo
+    o3 = ctx.createOscillator(); o3.type = ev ? 'sine' : 'sawtooth';
+    const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = ev ? 520 : 700; bp.Q.value = .8;
+    const g3 = ctx.createGain(); g3.gain.value = ev ? .9 : .55; o3.connect(bp); bp.connect(g3); g3.connect(g); o3.start();
+  }
+  e = { o1, o2, o3, f, g, p, ev }; SFX.eng.set(c, e); return e;
 }
-function stopEngine(c) { const e = SFX.eng.get(c); if (!e) return; const t = SFX.ctx.currentTime; e.g.gain.setTargetAtTime(0, t, .1); e.o1.stop(t + .6); e.o2.stop(t + .6); SFX.eng.delete(c); }
+function stopEngine(c) { const e = SFX.eng.get(c); if (!e) return; const t = SFX.ctx.currentTime; e.g.gain.setTargetAtTime(0, t, .1); e.o1.stop(t + .6); e.o2.stop(t + .6); if (e.o3) e.o3.stop(t + .6); SFX.eng.delete(c); }
 function updAudio(dt) {
   if (!SFX.ctx || SFX.ctx.state !== 'running') return;
   const t = SFX.ctx.currentTime, T = .06, inGame = state !== 'menu', GEAR = 9;
@@ -2393,7 +2399,7 @@ function updAudio(dt) {
     let freq;
     if (e.ev) freq = 70 + sp * 5;                                                   // elétrico: ruído brando e grave
     else { const gear = Math.min(5, Math.floor(sp / GEAR)), frac = (sp - gear * GEAR) / GEAR; freq = 34 + (gear ? 18 : 0) + frac * 38 + thr * 5 + (c.sputT > 0 ? -12 : 0); }
-    e.o1.frequency.setTargetAtTime(freq, t, T); e.o2.frequency.setTargetAtTime(e.ev ? freq * 1.5 : freq * .5, t, T);
+    e.o1.frequency.setTargetAtTime(freq, t, T); if (e.o3) e.o3.frequency.setTargetAtTime(freq * (e.ev ? 3 : 6), t, T); e.o2.frequency.setTargetAtTime(e.ev ? freq * 1.5 : freq * .5, t, T);
     e.f.frequency.setTargetAtTime(e.ev ? 260 + sp * 4 : 160 + thr * 260 + sp * 5, t, T);
     const vol = (e.ev ? .012 + sp / 40 * .016 : .06 + thr * .05 + sp / 40 * .03) * (mine ? 1 : .8) * (mine ? 1 : s.g) * (c.sputT > 0 ? .4 : 1);
     e.g.gain.setTargetAtTime(vol, t, T); if (e.p) e.p.pan.setTargetAtTime(mine ? 0 : s.pan, t, T);
@@ -2718,11 +2724,6 @@ function netJoin(code) {
   netConnect({ t: 'join', code, name: myName(), car: chosen });
 }
 function netBoot() {
-  // Áudio: o navegador só libera som depois de um toque. Qualquer toque/tecla reativa o som se ele
-  // ainda não começou (ex.: quem entrou pelo link e recarregou a cidade) ou se o celular o pausou.
-  const unlock = () => { if (!SFX.ctx || SFX.ctx.state !== 'running') audioInit(); };
-  for (const ev of ['pointerdown', 'touchend', 'keydown']) addEventListener(ev, unlock, { capture: true, passive: true });
-  document.addEventListener('visibilitychange', () => { if (!document.hidden && SFX.ctx && SFX.ctx.state !== 'running') SFX.ctx.resume().catch(() => { }); });
   // controle de direção analógico (arrastar o polegar para os lados)
   const el = $('steer'), knob = el.querySelector('i'); let pid = null;
   const set = e => {
@@ -2846,6 +2847,9 @@ document.querySelectorAll('.tb2').forEach(b => {
   const off = e => { e.preventDefault(); touch[k] = false; b.classList.remove('on'); };
   b.addEventListener('pointerdown', on); b.addEventListener('pointerup', off); b.addEventListener('pointercancel', off); b.addEventListener('pointerleave', off);
 });
+
+for (const ev of ['pointerup', 'touchend', 'click', 'keydown']) addEventListener(ev, () => { if (!SFX.ctx || SFX.ctx.state !== 'running') audioInit(); }, { capture: true, passive: true });
+document.addEventListener('visibilitychange', () => { if (!document.hidden && SFX.ctx && SFX.ctx.state !== 'running') { const r = SFX.ctx.resume(); if (r && r.catch) r.catch(() => { }); } });
 
 /* ---- celular: impede o zoom do navegador (pinça com dois polegares, toque duplo, toque longo) ---- */
 {
