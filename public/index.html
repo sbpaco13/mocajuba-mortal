@@ -580,16 +580,11 @@ const SHOP = (() => {
   }
   return null;
 })();
-// 6c) Casa da Trav. Teófilo Otoni, 225 (numeração a partir da orla: ~225 m da Descida da orla)
+// 6c) Casa da Trav. Teófilo Otoni, 225: lado norte, entre a Rua João Machado e a Rua 15 de Novembro, perto da João Machado
 const CASA225 = (() => {
-  const pts = [[19, -228], [112, -195], [191, -167], [268, -143], [369, -107]];
-  let left = 225, P = null, u = null;
-  for (let k = 0; k < pts.length - 1 && !P; k++) {
-    const [ax, az] = pts[k], [bx, bz] = pts[k + 1], L = Math.hypot(bx - ax, bz - az);
-    if (left <= L) { u = [(bx - ax) / L, (bz - az) / L]; P = [ax + u[0] * left, az + u[1] * left]; } else left -= L;
-  }
+  const A = [191, -167], B = [268, -143], L = Math.hypot(B[0] - A[0], B[1] - A[1]), u = [(B[0] - A[0]) / L, (B[1] - A[1]) / L], P = [A[0] + u[0] * 22, A[1] + u[1] * 22];
   const n = [-u[1], u[0]], W = 15, D = 11, off = RW.tertiary + 2.4;
-  for (const sh of [0, 6, -6, 12, -12]) for (const sn of [1, -1]) {
+  for (const sn of [-1, 1]) for (const sh of [0, 3, 6, -2, 10]) {
     const cx = P[0] + u[0] * sh + n[0] * sn * (off + D / 2), cz = P[1] + u[1] * sh + n[1] * sn * (off + D / 2);
     const Q = (a, b) => [cx + u[0] * a + n[0] * b, cz + u[1] * a + n[1] * b];
     const poly = [Q(-W / 2, -D / 2), Q(W / 2, -D / 2), Q(W / 2, D / 2), Q(-W / 2, D / 2)];
@@ -800,6 +795,8 @@ if (CASA225) {
   put(new THREE.BoxGeometry(W, .25, 1.7), creme, 0, 3.72, fz - .8);
   put(new THREE.BoxGeometry(7.6, 1.6, D + .4), marrom, -3.7, 7.6, .2);
   put(new THREE.BoxGeometry(7.4, 1.1, D - .6), marrom, 3.8, 7.25, -.3);
+  const nomeT = tx(512, 128, (c, w, h) => { c.fillStyle = '#4b3b34'; c.fillRect(0, 0, w, h); c.fillStyle = '#f3e9d6'; c.font = 'italic bold 84px Georgia, "Times New Roman", serif'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('Vô Bejo', w / 2, h / 2 + 4); });
+  put(new THREE.PlaneGeometry(5.6, 1.4), stdMat({ map: nomeT, roughness: .7 }), -3.7, 7.6, fz + .41, false);
   put(new THREE.BoxGeometry(.7, 7.0, .7), creme, -.2, 3.5, fz - .1);          // pilar que sobe até a platibanda
   put(new THREE.BoxGeometry(.6, 4, .6), creme, -7.2, 5.6, fz - .2);
   // portões de chapa ondulada com grade em cima
