@@ -15,8 +15,9 @@ canvas#gl{display:block;position:fixed;inset:0}
 h1{font-family:Rajdhani;font-weight:700;font-size:clamp(44px,8vw,96px);letter-spacing:.03em;line-height:.85;text-align:center;text-shadow:0 6px 40px rgba(255,110,30,.55)}
 h1 span{color:#ff7a2f}
 .sub{opacity:.85;margin:10px 0 22px;font-size:15px;text-align:center}
-#cars{display:grid;grid-template-columns:repeat(4,minmax(160px,215px));gap:12px}
-@media (max-width:860px){#cars{grid-template-columns:repeat(2,minmax(140px,1fr))}}
+#cars{display:grid;grid-template-columns:repeat(5,minmax(150px,200px));gap:12px}
+@media (max-width:1060px){#cars{grid-template-columns:repeat(3,minmax(140px,1fr))}}
+@media (max-width:640px){#cars{grid-template-columns:repeat(2,minmax(140px,1fr))}}
 .card{background:rgba(22,20,19,.82);border:2px solid rgba(255,255,255,.1);border-radius:14px;padding:10px 12px 12px;cursor:pointer;transition:border-color .15s,transform .15s}
 .card:hover{border-color:rgba(255,255,255,.3);transform:translateY(-2px)}
 .card.sel{border-color:#ff7a2f;background:rgba(58,30,14,.85)}
@@ -131,7 +132,7 @@ kbd{background:rgba(255,255,255,.14);border-radius:4px;padding:1px 6px;font-fami
   .card .st,.card small{display:none}
   .card b{font-size:15px}
 }
-@media (pointer:coarse) and (orientation:landscape){#cars{grid-template-columns:repeat(4,minmax(0,170px))}}
+@media (pointer:coarse) and (orientation:landscape){#cars{grid-template-columns:repeat(5,minmax(0,150px))}}
 </style>
 </head>
 <body>
@@ -1353,6 +1354,10 @@ const CARS = {
     name: 'EclaKicks', color: 0xf3f3f0, metal: .15, hp: 135, accel: 18, top: 33, mass: 1.45, turn: 2.1, grip: .95, desc: 'Mais vida e mais peso na pancada',
     L: 4.1, W: 1.92, wb: 2.55, fo: .72, wr: .43, clear: .3, fbY: .36, rbY: .4, noseY: .98, hoodY: 1.15, wsU: 1.0, roofFU: .2, roofY: 1.84, roofRU: -1.55, roofRY: 1.82, rgU: -1.9, beltR: 1.2, tailY: 1.18, th: .13, bU: -.3, cU: -1.12, roofCol: 0x161616, style: 'suv'
   },
+  jipe: {
+    name: 'Jipe cinza', color: 0x9ba2a9, metal: .3, hp: 125, accel: 19.5, top: 34.5, mass: 1.38, turn: 2.3, grip: 1.06, desc: 'Quadradão valente: aguenta pancada e segura bem nas curvas',
+    L: 4.2, W: 1.86, wb: 2.57, fo: .76, wr: .42, clear: .27, fbY: .36, rbY: .4, noseY: 1.02, hoodY: 1.13, wsU: .98, roofFU: .3, roofY: 1.88, roofRU: -1.78, roofRY: 1.87, rgU: -2.0, beltR: 1.24, tailY: 1.24, th: .08, bU: -.3, cU: -1.2, style: 'jipe'
+  },
   compacto: {
     name: 'Brunyaris', color: 0xf4f4f1, metal: .2, hp: 100, accel: 22, top: 38.5, mass: 1.05, turn: 2.5, grip: 1.0, desc: 'O mais rápido em linha reta',
     L: 3.8, W: 1.8, wb: 2.45, fo: .62, wr: .38, clear: .16, fbY: .22, rbY: .26, noseY: .72, hoodY: .98, wsU: .95, roofFU: 0, roofY: 1.52, roofRU: -1.33, roofRY: 1.49, rgU: -1.78, beltR: 1.06, tailY: 1.02, th: .22, bU: -.35, cU: -1.08, style: 'compacto'
@@ -1552,6 +1557,24 @@ function buildCarMesh(def) {
     box(.66, .26, .04, gridM, 0, c.noseY - .17, fz - .005);
     box(1.5, .3, .1, black, 0, c.fbY + .13, fz);
     box(1.5, .22, .1, black, 0, c.rbY + .08, rz);
+  } else if (c.style === 'jipe') {         // quadradão: para-lamas pretos, rack, faróis retangulares e protetor prata
+    for (const sx of [-1, 1]) {
+      lamp(sx, .36, .17, .62, 0, 0, 0);
+      box(.22, .22, .06, tl, sx * (W * .42 - .06), c.tailY - .22, rz - .005);
+      for (const u of [fa, ra]) {
+        box(.08, .1, 1.12, black, sx * (W / 2 - .02), c.wr + R + .07, u);
+        box(.08, R + .05, .12, black, sx * (W / 2 - .02), c.wr + R / 2 - .02, u + .54); box(.08, R + .05, .12, black, sx * (W / 2 - .02), c.wr + R / 2 - .02, u - .54);
+      }
+      box(.05, .06, 2.0, black, sx * (W / 2 - .18), c.roofY + .1, -.65);
+      box(.07, .12, 1.0, black, sx * (W / 2 - .01), c.clear + .1, (fa + ra) / 2);   // soleira preta
+    }
+    for (const u of [-1.3, -.7, -.1]) box(W - .36, .035, .05, black, 0, c.roofY + .13, u);
+    box(1.0, .1, .04, gridM, 0, c.noseY - .12, fz - .005);
+    box(1.0, .06, .04, chrome, 0, c.noseY - .24, fz - .004);
+    box(1.6, .32, .1, black, 0, c.fbY + .13, fz);
+    box(.9, .08, .11, chrome, 0, c.fbY + .02, fz + .005);
+    box(1.6, .26, .1, black, 0, c.rbY + .08, rz);
+    box(.8, .07, .11, chrome, 0, c.rbY - .03, rz - .005);
   } else {                                 // compacto: laranja, faixa branca, entrada de ar e aerofólio
     for (const sx of [-1, 1]) {
       lamp(sx, .44, .12, .52, 0, 0, .55);
@@ -1599,13 +1622,13 @@ function buildCarMesh(def) {
   const tireG = new THREE.LatheGeometry([[c.wr * .66, -.1], [c.wr * .88, -.106], [c.wr - .025, -.098], [c.wr, -.065], [c.wr + .004, 0], [c.wr, .065], [c.wr - .025, .098], [c.wr * .88, .106], [c.wr * .66, .1]].map(([a, b]) => new THREE.Vector2(a, b)), 32).rotateZ(Math.PI / 2);
   const tireM = new THREE.MeshStandardMaterial({ color: 0xffffff, map: CT.tread, roughness: .88 });
   const calM = new THREE.MeshStandardMaterial({ color: c.style === 'eletrico' ? 0x9a1f22 : 0x3a3c3f, roughness: .45, metalness: .4 });
-  const rimCol = c.style === 'eletrico' ? 0x3a3e42 : c.style === 'suv' ? 0x1b1d1f : 0xbfc3c7;
+  const rimCol = c.style === 'eletrico' ? 0x3a3e42 : c.style === 'suv' ? 0x1b1d1f : c.style === 'jipe' ? 0x55595d : 0xbfc3c7;
   const rimM = new THREE.MeshStandardMaterial({ color: rimCol, metalness: .85, roughness: .25 });
   const faceM = new THREE.MeshStandardMaterial({ color: 0xd9dde0, metalness: 1, roughness: .18 });
   const discM = new THREE.MeshStandardMaterial({ color: 0x77797b, metalness: .8, roughness: .5 });
   const rr = c.wr * .64;
   const rimParts = [new THREE.CylinderGeometry(rr, rr, .14, 28, 1, true).rotateZ(Math.PI / 2).toNonIndexed(), new THREE.CylinderGeometry(rr * .25, rr * .25, .05, 16).rotateZ(Math.PI / 2).translate(.06, 0, 0).toNonIndexed()];
-  const nSp = c.style === 'suv' ? 10 : c.style === 'eletrico' ? 5 : 5;
+  const nSp = c.style === 'suv' ? 10 : c.style === 'jipe' ? 6 : 5;
   const spokes = [];
   for (let i = 0; i < nSp; i++) { const a = i / nSp * Math.PI * 2; const sp = new THREE.BoxGeometry(.03, rr * .8, c.style === 'eletrico' ? .13 : .055).translate(0, rr * .55, 0).rotateX(a).translate(.055, 0, 0); spokes.push(sp.toNonIndexed()); }
   const rimG = mergeGeometries(rimParts), spokeG = mergeGeometries(spokes);
@@ -2610,7 +2633,7 @@ function setEngine(e, sp, thr, t, T, sput) {
 }
 function engineFor(c) {
   let e = SFX.eng.get(c); if (e) return e;
-  e = buildEngine(SFX.ctx, SFX.master, c.def.style === 'eletrico', SFX.nb, SFX.engBuf, { compacto: 1.08, mono: 1, suv: .86 }[c.key] || 1); SFX.eng.set(c, e); return e;
+  e = buildEngine(SFX.ctx, SFX.master, c.def.style === 'eletrico', SFX.nb, SFX.engBuf, { compacto: 1.08, mono: 1, suv: .86, jipe: .8 }[c.key] || 1); SFX.eng.set(c, e); return e;
 }
 function stopEngine(c) { const e = SFX.eng.get(c); if (!e) return; const t = SFX.ctx.currentTime; e.g.gain.setTargetAtTime(0, t, .1); for (const o of [...e.oscs, ...e.srcs]) o.stop(t + .6); SFX.eng.delete(c); }
 function updAudio(dt) {
