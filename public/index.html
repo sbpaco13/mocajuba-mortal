@@ -1309,6 +1309,10 @@ function astar(s, t) {
 // segmentos com nome (para mostrar a rua atual)
 const NAMED = [];
 for (const r of ROADS) if (r.n) for (let k = 0; k < r.p.length - 1; k++) NAMED.push([r.p[k], r.p[k + 1], r.n]);
+if (CASA225) {   // na frente da casa o HUD mostra o nome
+  const { x, z, ry, W, D } = CASA225, f = [Math.sin(ry), Math.cos(ry)], u = [Math.cos(ry), -Math.sin(ry)], Q = (a, b) => [x + u[0] * a + f[0] * b, z + u[1] * a + f[1] * b];
+  NAMED.push([null, [Q(-W / 2 - 3, D / 2 - .5), Q(W / 2 + 3, D / 2 - .5), Q(W / 2 + 3, D / 2 + 13), Q(-W / 2 - 3, D / 2 + 13)], 'Casa do Vô Bejo 🏠']);
+}
 for (const [t, n, p] of OSM.poly) if (n) NAMED.push([null, p, n]);
 function streetName(x, z) {
   for (const [a, p, n] of NAMED) if (!a && pip(p, x, z)) return n;
@@ -2655,6 +2659,10 @@ function drawMini() {
   const P = (x, z) => [clamp(x - ox, 8, MS - 8), clamp(z - oz, 8, MS - 8)];
   for (const a of ACAI.list) if (a.up) { const [x, z] = P(a.x, a.z); mg.fillStyle = '#d4232a'; mg.beginPath(); mg.arc(x, z, 6, 0, 7); mg.fill(); mg.strokeStyle = '#fff'; mg.lineWidth = 2; mg.stroke(); }
   for (const p of pickups) if (p.active) { const [x, z] = P(p.x, p.z); mg.fillStyle = ITEMS[p.item].color; mg.fillRect(x - 6, z - 6, 12, 12); mg.strokeStyle = '#000'; mg.lineWidth = 2; mg.strokeRect(x - 6, z - 6, 12, 12); }
+  if (CASA225) {   // casa do Vô Bejo: fica presa na borda do minimapa apontando a direção quando está longe
+    const [x, z] = P(CASA225.x, CASA225.z); mg.fillStyle = '#fff'; mg.beginPath(); mg.arc(x, z, 10, 0, 7); mg.fill(); mg.strokeStyle = '#4b3b34'; mg.lineWidth = 2.5; mg.stroke();
+    mg.font = '13px sans-serif'; mg.textAlign = 'center'; mg.textBaseline = 'middle'; mg.fillText('🏠', x, z + 1);
+  }
   for (const c of cars) {
     const [x, z] = P(c.x, c.z);
     mg.save(); mg.translate(x, z); mg.rotate(-c.h + Math.PI);
