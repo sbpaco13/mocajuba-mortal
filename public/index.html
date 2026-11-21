@@ -1699,6 +1699,7 @@ function deform(car, lx, ly, lz, dx, dy, dz, amt, rad) {
   const r2 = rad * rad, MAXD = .5, sd = Math.random() * 6;
   for (const sh of car.m.shells) {
     const g = sh.mesh.geometry, p = g.attributes.position, a = p.array, o = sh.orig, nrm = g.attributes.normal.array;
+    if (!sh.origN) sh.origN = new Float32Array(nrm);
     const tris = new Set();
     for (let i = 0; i < p.count; i++) {
       const i3 = i * 3, x = a[i3], y = a[i3 + 1], z = a[i3 + 2], ex = x - lx, ey = y - ly, ez = z - lz, d2 = ex * ex + ey * ey + ez * ez;
@@ -1745,7 +1746,7 @@ function lightsOut(car) {
   shards(car, 0, .6, car.def.L / 2, 0xe8f0ff);
 }
 function crackGlass(car) {
-  if (car.m.cracked || !car.m.glassMesh) return; car.m.cracked = true; sfx.glass(car.x, car.z);
+  if (car.m.cracked || !car.m.glassMesh) return; car.m.cracked = true; sfx.glass(car.x, car.z); car.m.glassMat0 = car.m.glassMat0 || car.m.glassMesh.material;
   car.m.glassMesh.material = TOON ? (crackedGlass.toon || (crackedGlass.toon = new THREE.MeshToonMaterial({ map: crackedGlass.map, color: 0xb9dcf0, gradientMap: TOON_GRAD }))) : crackedGlass;
   shards(car, 0, 1.2, 0, 0xbfe6ef);
 }
@@ -1858,7 +1859,26 @@ for (const sp of SPOTS) {
   const lbl = labelSprite(); lbl.position.y = 3.4; lbl.scale.set(5.2, 1.3, 1); g.add(lbl);
   pickups.push({ ...sp, g, crate, box, wrench, crateM, beamM, ring, lbl, item: null, active: false, t: 0 });
 }
-function setPickup(p, item) {
+// ---- armas nascem em lugares aleatórios das ruas ----
+const PICK_NODES = gN.map((n, i) => i).filter(i => gN[i].e.length && inBounds(gN[i].x, gN[i].z) && sdfAt(gN[i].x, gN[i].z) > 3.5 && !waterAt(gN[i].x, gN[i].z));
+function randPickPos(p, test) {
+  for (let k = 0; k < 200; k++) {
+    const nd = gN[pick(PICK_NODES)], nb = gN[pick(nd.e)[0]], t = Math.random(), x = nd.x + (nb.x - nd.x) * t, z = nd.z + (nb.z - nd.z) * t;
+    if (!inBounds(x, z) || sdfAt(x, z) < 3.5 || waterAt(x, z)) continue;
+    if (pickups.some(q => q !== p && q.placed && Math.hypot(q.x - x, q.z - z) < (k < 120 ? 45 : 20))) continue;
+    if (test && !test(x, z, k)) continue;
+    return [+x.toFixed(2), +z.toFixed(2)];
+  }
+  return [p.x, p.z];
+}
+function movePickup(p, x, z) { p.x = x; p.z = z; p.g.position.set(x, 0, z); p.placed = true; p.n = streetName(x, z) || 'Ruas de Mocajuba'; }
+function respawnPickup(p) {
+  const it = p.fixed || pick(ITEM_POOL);
+  if (!p.fixed) { const [x, z] = randPickPos(p, (x, z, k) => k > 150 || cars.every(c => !c.alive || Math.hypot(c.x - x, c.z - z) > 30)); movePickup(p, x, z); }
+  setPickup(p, it);
+}
+function setPickup(p, item, x, z) {
+  if (x != null) movePickup(p, x, z);
   p.item = item; p.active = true; const col = new THREE.Color(ITEMS[item].color);
   p.crateM.color.copy(col); p.crateM.emissive.copy(col); p.beamM.color.copy(col); p.ring.material.color.copy(col);
   p.box.visible = item !== 'reparo'; p.wrench.visible = item === 'reparo';
@@ -1929,6 +1949,31 @@ function createCar(key, name, isPlayer, x, z, h, o = {}) {
   if (!isPlayer) makeTag(car);
   cars.push(car); return car;
 }
+// ---- conserto visual: ao recuperar vida o carro também se recupera ----
+function rebuildCar(car) {   // peças, rodas e faróis perdidos: monta o carro de novo
+  const old = car.m, m = buildCarMesh(car.def); scene.add(m.root);
+  m.root.position.copy(old.root.position); m.root.quaternion.copy(old.root.quaternion); m.root.scale.copy(old.root.scale);
+  if (car.tag) m.root.add(car.tag);
+  scene.remove(old.root); old.root.traverse(o => { if (o.geometry && o !== car.tag) o.geometry.dispose(); });
+  car.m = m;
+}
+function fixLook(car, gain) {
+  if (!car.m || !car.alive || !(gain > 0)) return;
+  const full = car.hp >= car.maxHp * .98, frac = full ? 1 : clamp(gain / car.maxHp * 2.2, 0, 1);
+  const P = car.m.parts || {}, structural = car.m.lightsOut || Object.values(P).some(p => p.gone || p.sag) || (car.m.wheelMeta || []).some(w => w.gone);
+  if (structural && frac >= .6) rebuildCar(car);
+  else if (car.m.shells) for (const sh of car.m.shells) {
+    const g = sh.mesh.geometry, a = g.attributes.position.array, o = sh.orig;
+    for (let i = 0; i < a.length; i++) a[i] += (o[i] - a[i]) * frac;
+    g.attributes.position.needsUpdate = true;
+    if (sh.origN) { const n = g.attributes.normal.array; for (let i = 0; i < n.length; i++) n[i] += (sh.origN[i] - n[i]) * frac; g.attributes.normal.needsUpdate = true; }
+  }
+  for (const k in car.dmg) car.dmg[k] *= 1 - frac;
+  if (car.m.cracked && car.hp >= car.maxHp * .35 && car.m.glassMat0) { car.m.glassMesh.material = car.m.glassMat0; car.m.cracked = false; }
+  dmgLook(car);
+  for (let k = 0; k < 16; k++) emit('add', car.x + rand(-1, 1), rand(.4, 1.6), car.z + rand(-1.5, 1.5), { vy: rand(1, 2.5), life: rand(.5, 1), s0: .14, s1: .04, color: 0x7dff9a });
+}
+function heal(car, amt) { const h0 = car.hp; car.hp = Math.min(car.maxHp, car.hp + amt); drawTag(car); fixLook(car, car.hp - h0); }
 function dmgLook(car) { car.m.paint.color.copy(car.m.baseColor).lerp(new THREE.Color(0x2a2620), (1 - car.hp / car.maxHp) * .55); }
 
 const CAUSE = { batida: '💥', metralhadora: '🔫', foguete: '🚀', mina: '💣', rio: '🌊', lago: '🌊', parede: '🧱' };
@@ -2146,14 +2191,14 @@ function updProjectiles(dt) {
 }
 function updPickups(dt) {
   for (const p of pickups) {
-    if (!p.active) { if (NET.on && !NET.isHost()) continue; p.t -= dt; if (p.t <= 0) { const it = p.fixed || pick(ITEM_POOL); setPickup(p, it); if (NET.on) netSend({ t: 'pspawn', i: pickups.indexOf(p), item: it }); } continue; }
+    if (!p.active) { p.t -= dt; if (NET.on && !NET.isHost()) continue; if (p.t <= 0) { respawnPickup(p); if (NET.on) netSend({ t: 'pspawn', i: pickups.indexOf(p), item: p.item, x: p.x, z: p.z }); } continue; }
     p.crate.rotation.y += dt * 1.6; p.crate.position.y = 1.3 + Math.sin(now * 2.5 + p.x) * .25;
     if (state !== 'play') continue;
     for (const c of cars) {
       if (!c.alive || c.remote || Math.hypot(c.x - p.x, c.z - p.z) > 3) continue;
       const it = p.item;
       if (NET.on) netSend({ t: 'pick', i: pickups.indexOf(p), id: c.id, item: it });
-      if (it === 'reparo') { c.hp = Math.min(c.maxHp, c.hp + 45); drawTag(c); dmgLook(c); }
+      if (it === 'reparo') heal(c, 45);
       else if (it === 'espinhos' || it === 'nitro' || it === 'escudo') c.fx[it] = { espinhos: 9, nitro: 5, escudo: 6 }[it];
       else c.weapon = it === 'metralhadora' ? { type: it, t: 20, max: 20 } : it === 'foguete' ? { type: it, ammo: 2, t: 20, max: 20 } : { type: it, ammo: 3, t: 20, max: 20 };
       if (c === camTarget()) sfx.pickup();
@@ -2414,7 +2459,7 @@ function updAcai(dt) {
       throwObj(a.g, c.vx * .7 + rand(-1, 1), rand(3, 6), c.vz * .7 + rand(-1, 1));
       for (let k = 0; k < 18; k++) emit('norm', a.x, 1.2, a.z, { vx: rand(-3, 3), vy: rand(2, 5), vz: rand(-3, 3), life: .8, s0: .12, s1: .05, g: 16, color: pick([0x4a1240, 0x6b1d5c, 0x2e0b2a]) });
       const ganho = Math.min(18, c.maxHp - c.hp);
-      c.hp = Math.min(c.maxHp, c.hp + 18); drawTag(c); dmgLook(c);
+      heal(c, 18);
       if (c === camTarget()) sfx.acai();
       if (c === camTarget()) toast(`<span style="color:#e070c8">🍇 Açaí! +${Math.round(ganho)} de vida</span>`, 1.8);
       break;
@@ -2486,7 +2531,7 @@ function updEggs(dt) {
   if (EGG.signUp && state === 'play') for (const c of cars) {
     if (!c.alive || Math.hypot(c.x - SIGN_G.x, c.z - SIGN_G.z) > 2.6 || Math.abs(c.speed) < 4) continue;
     EGG.signUp = false; sfx.clank(SIGN_G.x, SIGN_G.z); throwObj(EGG.sign, c.vx * .8, rand(4, 7), c.vz * .8); sparks(SIGN_G.x, 1.5, SIGN_G.z, 12, 0xd8b47a);
-    if (c === p) { c.hp = Math.min(c.maxHp, c.hp + 20); drawTag(c); toast('<span style="color:#ffd27a">🏖️ Derrubou a placa da Praia dos Gorgos! +20 de vida (banho de rio)</span>', 2.5); }
+    if (c === p) { heal(c, 20); toast('<span style="color:#ffd27a">🏖️ Derrubou a placa da Praia dos Gorgos! +20 de vida (banho de rio)</span>', 2.5); }
     break;
   }
 }
@@ -2884,7 +2929,8 @@ function startOnline(plan) {
     const c = createCar(d.key, d.name, isP, d.x, d.z, d.h, { id: d.id, owner: d.owner, remote: d.owner !== NET.me, human: !!d.human });
     if (isP) player = c;
   }
-  plan.items.forEach((it, i) => { if (pickups[i]) setPickup(pickups[i], it); });
+  for (const p of pickups) p.placed = false;
+  plan.items.forEach((it, i) => { if (pickups[i]) setPickup(pickups[i], ...it); });
   setupEggs();
   const f = player || cars[0];
   camera.position.set(f.x - Math.sin(f.h) * 9, 4, f.z - Math.cos(f.h) * 9); camLook.set(f.x, 1, f.z);
@@ -2953,7 +2999,7 @@ function netOn(m) {
       for (const e of m.c) {
         const c = byId(e[0]); if (!c || !c.remote || !c.alive) continue;
         const b = c.net.buf; b.push({ t, x: e[1], z: e[2], h: e[3], sp: e[4], vx: e[5], vz: e[6], st: e[9], sl: e[10], thr: e[11], y: e[12] }); if (b.length > 12) b.shift();
-        if (c.hp !== e[7]) { c.hp = e[7]; drawTag(c); dmgLook(c); if (c.hp < c.maxHp * .35) crackGlass(c); }
+        if (c.hp !== e[7]) { const gain = e[7] - c.hp; c.hp = e[7]; drawTag(c); dmgLook(c); if (gain > 4) fixLook(c, gain); if (c.hp < c.maxHp * .35) crackGlass(c); }
         c.fx.espinhos = e[8] & 1 ? .5 : 0; c.fx.nitro = e[8] & 2 ? .5 : 0; c.fx.escudo = e[8] & 4 ? .5 : 0;
         c.weapon = e[13] ? { type: e[13], t: 1, max: 1 } : null;
       }
@@ -2976,7 +3022,7 @@ function netOn(m) {
       const c = byId(m.id); if (c && c === camTarget()) toast(`<span style="color:${ITEMS[m.item].color}">${ITEMS[m.item].icon} ${ITEMS[m.item].label}</span>`);
       break;
     }
-    case 'pspawn': if (pickups[m.i]) setPickup(pickups[m.i], m.item); break;
+    case 'pspawn': if (pickups[m.i]) setPickup(pickups[m.i], m.item, m.x, m.z); break;
   }
 }
 function needName() {
@@ -3032,7 +3078,7 @@ function netBoot() {
     netMsg(`Você foi convidado para a sala <b>${q.toUpperCase()}</b>: escolha seu carro, confira seu nome e toque em <b>Entrar na sala</b>.`);
   }
 }
-window.__netDbg = { pk: () => pickups.map(p => [p.n, p.x | 0, p.z | 0, p.item, p.active]), go: () => { countT = .01; }, NET, cars: () => cars, player: () => player, damage, keys, touch, st: () => state, pickups };
+window.__netDbg = { heal: (c, a) => heal(c, a), impactAt, wreckParts: c => { for (const n in c.m.parts) detachPart(c, n, 1, 0); lightsOut(c); }, pk: () => pickups.map(p => [p.n, p.x | 0, p.z | 0, p.item, p.active]), go: () => { countT = .01; }, NET, cars: () => cars, player: () => player, damage, keys, touch, st: () => state, pickups };
 
 /* ============================ MENU / PARTIDA ============================ */
 let chosen = 'eletrico';
@@ -3077,10 +3123,17 @@ function pickSpawns(n) {   // cada carro nasce a 12–55 m de um ponto de arma
   }
   return null;
 }
-function startItems(spawns) {   // itens iniciais; o ponto mais perto de cada carro começa com uma arma
-  const items = pickups.map(p => p.fixed || pick(ITEM_POOL));
-  for (const [x, z] of spawns) { let bi = 0, bd = 1e9; pickups.forEach((p, i) => { if (p.fixed) return; const d = Math.hypot(p.x - x, p.z - z); if (d < bd) { bd = d; bi = i; } }); items[bi] = pick(['metralhadora', 'foguete', 'minas']); }
-  return items;
+function startItems(spawns) {   // [item, x, z] de cada ponto: uma arma a 20–55 m de cada carro, o resto espalhado ao acaso
+  for (const p of pickups) p.placed = !!p.fixed;
+  const out = pickups.map(() => null), free = pickups.map((p, i) => i).filter(i => !pickups[i].fixed);
+  pickups.forEach((p, i) => { if (p.fixed) out[i] = [p.fixed, p.x, p.z]; });
+  spawns.forEach(([sx, sz], k) => {
+    const i = free[k]; if (i == null) return; const p = pickups[i];
+    const [x, z] = randPickPos(p, (x, z, t) => { const d = Math.hypot(x - sx, z - sz); return t > 180 || (d > 20 && d < 55); });
+    p.x = x; p.z = z; p.placed = true; out[i] = [pick(['metralhadora', 'foguete', 'minas']), x, z];
+  });
+  for (const i of free.slice(spawns.length)) { const p = pickups[i], [x, z] = randPickPos(p); p.x = x; p.z = z; p.placed = true; out[i] = [pick(ITEM_POOL), x, z]; }
+  return out;
 }
 function startMatch() {
   clearMatch();
@@ -3090,7 +3143,7 @@ function startMatch() {
   const sp0 = spawns[0];
   player = createCar(chosen, name, true, sp0[0], sp0[1], sp0[2]);
   for (let i = 0; i < nb; i++) { const s = spawns[i + 1]; createCar(pick(CAR_KEYS), names[i], false, s[0], s[1], s[2]); }
-  const its = startItems(spawns); pickups.forEach((p, i) => setPickup(p, its[i]));
+  const its = startItems(spawns); pickups.forEach((p, i) => setPickup(p, ...its[i]));
   setupEggs();
   camera.position.set(player.x - Math.sin(player.h) * 9, 4, player.z - Math.cos(player.h) * 9);
   camLook.set(player.x, 1, player.z);
