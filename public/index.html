@@ -580,6 +580,27 @@ const SHOP = (() => {
   }
   return null;
 })();
+// 6c) Casa da Trav. Teófilo Otoni, 225 (numeração a partir da orla: ~225 m da Descida da orla)
+const CASA225 = (() => {
+  const pts = [[19, -228], [112, -195], [191, -167], [268, -143], [369, -107]];
+  let left = 225, P = null, u = null;
+  for (let k = 0; k < pts.length - 1 && !P; k++) {
+    const [ax, az] = pts[k], [bx, bz] = pts[k + 1], L = Math.hypot(bx - ax, bz - az);
+    if (left <= L) { u = [(bx - ax) / L, (bz - az) / L]; P = [ax + u[0] * left, az + u[1] * left]; } else left -= L;
+  }
+  const n = [-u[1], u[0]], W = 15, D = 11, off = RW.tertiary + 2.4;
+  for (const sh of [0, 6, -6, 12, -12]) for (const sn of [1, -1]) {
+    const cx = P[0] + u[0] * sh + n[0] * sn * (off + D / 2), cz = P[1] + u[1] * sh + n[1] * sn * (off + D / 2);
+    const Q = (a, b) => [cx + u[0] * a + n[0] * b, cz + u[1] * a + n[1] * b];
+    const poly = [Q(-W / 2, -D / 2), Q(W / 2, -D / 2), Q(W / 2, D / 2), Q(-W / 2, D / 2)];
+    let ok = true; stampPoly(poly, i => { if (cls[i] !== 0 || solidM[i]) ok = false; });
+    if (!ok) continue;
+    stampPoly(poly, i => { resv[i] = 1; solidM[i] = 1; occ[i] = 1; });
+    const f = [-n[0] * sn, -n[1] * sn];
+    return { x: cx, z: cz, W, D, ry: Math.atan2(f[0], f[1]) };
+  }
+  return null;
+})();
 // 7) árvores e coreto nas praças, letreiro na orla
 const plazaTrees = [];
 for (const [t, n, p] of OSM.poly) {
@@ -763,6 +784,54 @@ if (SHOP) {
   const pk = put(new THREE.PlaneGeometry(W, 2.3), stdMat({ map: parkT, roughness: .9 }), 0, .035, fz + 1.15, false); pk.rotation.x = -Math.PI / 2;
   const brickM = stdMat({ color: 0xb4532e, roughness: .95 });
   for (let k = 0; k < 6; k++) put(new THREE.BoxGeometry(.42, .2, .2), brickM, 3.8 + (k % 3) * .44, .1 + Math.floor(k / 3) * .21, fz + .5);
+}
+// Casa 225 da Teófilo Otoni: dois andares, platibanda marrom, varanda com guarda-corpo branco, portões de chapa
+window.__casa = CASA225;
+if (CASA225) {
+  const g = new THREE.Group(); g.position.set(CASA225.x, 0, CASA225.z); g.rotation.y = CASA225.ry; scene.add(g);
+  const { W, D } = CASA225, fz = D / 2;
+  const put = (geo, mat, x, y, z, cast = true) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.castShadow = cast; m.receiveShadow = true; g.add(m); return m; };
+  const tx = (w, h, draw) => { const t = canvasTex(w, h, draw); t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping; return t; };
+  const creme = stdMat({ color: 0xece3d2, roughness: .85 }), marrom = stdMat({ color: 0x4b3b34, roughness: .7 }), escuro = stdMat({ color: 0x24282c, roughness: .3, metalness: .4 });
+  // corpo: térreo inteiro, andar de cima recuado 1,6 m
+  put(new THREE.BoxGeometry(W, 3.6, D), creme, 0, 1.8, 0);
+  put(new THREE.BoxGeometry(W, 3.2, D - 1.6), creme, 0, 5.2, -.8);
+  // laje da varanda e platibandas marrons (a da esquerda mais alta e mais à frente)
+  put(new THREE.BoxGeometry(W, .25, 1.7), creme, 0, 3.72, fz - .8);
+  put(new THREE.BoxGeometry(7.6, 1.6, D + .4), marrom, -3.7, 7.6, .2);
+  put(new THREE.BoxGeometry(7.4, 1.1, D - .6), marrom, 3.8, 7.25, -.3);
+  put(new THREE.BoxGeometry(.7, 7.0, .7), creme, -.2, 3.5, fz - .1);          // pilar que sobe até a platibanda
+  put(new THREE.BoxGeometry(.6, 4, .6), creme, -7.2, 5.6, fz - .2);
+  // portões de chapa ondulada com grade em cima
+  const gateT = (bars) => tx(256, 256, (c, w, h) => {
+    for (let x = 0; x < w; x += 8) { const gr = c.createLinearGradient(x, 0, x + 8, 0); gr.addColorStop(0, '#c9ccce'); gr.addColorStop(.5, '#f1f2f2'); gr.addColorStop(1, '#a9adb0'); c.fillStyle = gr; c.fillRect(x, 0, 8, h); }
+    const top = h * .42; c.fillStyle = bars; c.fillRect(0, 0, w, top);
+    c.fillStyle = '#f4f4f2'; for (let x = 4; x < w; x += 18) c.fillRect(x, 0, 6, top);
+    c.fillRect(0, top - 10, w, 10); c.fillRect(0, top + 20, w, 6); c.fillStyle = 'rgba(0,0,0,.25)'; c.fillRect(w / 2 - 1, top, 2, h - top);
+  });
+  put(new THREE.PlaneGeometry(4.6, 3.4), stdMat({ map: gateT('#3b3f43'), roughness: .5, metalness: .3 }), -4.6, 1.7, fz + .02, false);
+  put(new THREE.PlaneGeometry(1.3, 2.6), stdMat({ map: gateT('#3a2b25'), roughness: .5, metalness: .3 }), 1.3, 1.3, fz + .02, false);
+  put(new THREE.PlaneGeometry(4.4, 2.6), stdMat({ map: gateT('#3a2b25'), roughness: .5, metalness: .3 }), 4.6, 1.3, fz + .02, false);
+  // número 225 em pé no pilar
+  const numT = tx(64, 256, (c, w, h) => { c.fillStyle = '#ece3d2'; c.fillRect(0, 0, w, h); c.fillStyle = '#1d1d1d'; c.font = 'bold 54px Arial, sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle'; ['2', '2', '5'].forEach((d, i) => c.fillText(d, w / 2, 58 + i * 64)); });
+  put(new THREE.PlaneGeometry(.45, 1.6), stdMat({ map: numT, roughness: .8 }), -.2, 2.3, fz + .26, false);
+  // faixa de pedra
+  const pedraT = tx(512, 64, (c, w, h) => { c.fillStyle = '#5e5650'; c.fillRect(0, 0, w, h); for (let y = 0; y < h; y += 8) for (let x = -(y % 16) * 2; x < w; x += 22 + Math.random() * 30) { const v = 70 + Math.random() * 70; c.fillStyle = `rgb(${v + 20},${v + 8},${v})`; c.fillRect(x, y + 1, 18 + Math.random() * 24, 6); } });
+  put(new THREE.PlaneGeometry(W - 6, .7), stdMat({ map: pedraT, roughness: .95 }), 3, 3.25, fz + .02, false);
+  // andar de cima: janelas e portas de vidro escuro
+  for (const [x, w, h, y] of [[-4.6, 2.4, 1.3, 5.4], [1.2, 2.2, 2.3, 4.95], [4.9, 2.4, 1.3, 5.4]]) put(new THREE.PlaneGeometry(w, h), escuro, x, y, fz - 1.59, false);
+  // guarda-corpo: faixa branca com retângulos vazados e barras escuras embaixo
+  const railT = tx(512, 128, (c, w, h) => {
+    c.clearRect(0, 0, w, h); c.fillStyle = '#2b2b2b'; for (let x = 3; x < w; x += 10) c.fillRect(x, 46, 3, h - 46);
+    c.fillStyle = '#f5f5f2'; c.fillRect(0, 0, w, 7); c.fillRect(0, 40, w, 7); c.fillRect(0, h - 6, w, 6);
+    c.strokeStyle = '#f5f5f2'; c.lineWidth = 5; for (let x = 8; x < w - 40; x += 64) { c.strokeRect(x, 14, 52, 20); c.beginPath(); c.moveTo(x + 52, 24); c.lineTo(x + 64, 24); c.stroke(); }
+  });
+  railT.wrapS = THREE.RepeatWrapping; railT.repeat.set(2, 1);
+  const rail = put(new THREE.PlaneGeometry(W - .4, 1.1), stdMat({ map: railT, transparent: true, alphaTest: .4, side: THREE.DoubleSide, roughness: .6 }), 0, 4.4, fz - .05, false);
+  rail.castShadow = true;
+  // plantas do jardim atrás do portão
+  const folhaM = stdMat({ color: 0x3f7a35, roughness: .9 });
+  for (const x of [2.3, 3.6, 5.2, 6.4]) put(new THREE.SphereGeometry(.45 + Math.random() * .2, 8, 6), folhaM, x, 2.75, fz - .4);
 }
 // praças, lago, cemitério, mercado
 function shapeGeo(p) { const s = new THREE.Shape(p.map(([x, z]) => new THREE.Vector2(x, -z))); return s; }
