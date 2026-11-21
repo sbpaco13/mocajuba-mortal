@@ -1990,7 +1990,7 @@ function physics(c, inp, dt) {
     if (vn < 0) {
       c.vx -= 1.3 * vn * nx; c.vz -= 1.3 * vn * nz; c.vx *= .85; c.vz *= .85;
       if (-vn > 2.5 && -vn <= 9 && now - (c.scrT || 0) > .15) { c.scrT = now; sfx.scrape(c.x, c.z); }
-      const imp = -vn; if (imp > 9) { impactAt(c, c.x - nx * CAR_R, c.z - nz * CAR_R, .55, nx, nz, (imp - 9) * .9); damage(c, (imp - 9) * .55, null, 'parede'); sparks(c.x - nx * CAR_R, .6, c.z - nz * CAR_R, 6); if (c === camTarget()) shake = Math.max(shake, imp / 40); }
+      const imp = -vn; if (imp > 9) { impactAt(c, c.x - nx * CAR_R, c.z - nz * CAR_R, .55, nx, nz, (imp - 9) * .9); damage(c, (imp - 9) * .55 * clamp((imp - 9) / 8, 0, 1), null, 'parede'); sparks(c.x - nx * CAR_R, .6, c.z - nz * CAR_R, 6); if (c === camTarget()) shake = Math.max(shake, imp / 40); }
     }
   };
   // ruas reais: colisão pelo campo de distância (casas, muros, borda do mapa)
@@ -2015,7 +2015,8 @@ function carCollisions() {
     const jj = 1.35 * rel / (1 / ma + 1 / mb);
     if (!a.remote) { a.vx -= jj / ma * nx; a.vz -= jj / ma * nz; } if (!b.remote) { b.vx += jj / mb * nx; b.vz += jj / mb * nz; }
     const fa = Math.max(0, Math.sin(a.h) * nx + Math.cos(a.h) * nz), fb = Math.max(0, -(Math.sin(b.h) * nx + Math.cos(b.h) * nz));
-    const atkA = Math.max(0, va), atkB = Math.max(0, -vb);
+    const kt = clamp((rel - 4) / 12, 0, 1), kv = kt * kt * (3 - 2 * kt);   // batida lenta (< ~15 km/h) quase não tira vida; a partir de ~58 km/h dano cheio
+    const atkA = Math.max(0, va) * kv, atkB = Math.max(0, -vb) * kv;
     const toB = atkA * ma * (.55 + .6 * fa) * (a.fx.espinhos > 0 ? 2.3 : 1) + (b.fx.espinhos > 0 ? 0 : 0);
     const toA = atkB * mb * (.55 + .6 * fb) * (b.fx.espinhos > 0 ? 2.3 : 1);
     const selfA = a.fx.espinhos > 0 ? 0 : atkA * ma * .18, selfB = b.fx.espinhos > 0 ? 0 : atkB * mb * .18;
