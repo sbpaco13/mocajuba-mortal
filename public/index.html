@@ -1966,7 +1966,7 @@ function updPickups(dt) {
       if (NET.on) netSend({ t: 'pick', i: pickups.indexOf(p), id: c.id, item: it });
       if (it === 'reparo') { c.hp = Math.min(c.maxHp, c.hp + 45); drawTag(c); dmgLook(c); }
       else if (it === 'espinhos' || it === 'nitro' || it === 'escudo') c.fx[it] = { espinhos: 9, nitro: 5, escudo: 6 }[it];
-      else c.weapon = it === 'metralhadora' ? { type: it, t: 15, max: 15 } : it === 'foguete' ? { type: it, ammo: 2, t: 20, max: 20 } : { type: it, ammo: 3, t: 40, max: 40 };
+      else c.weapon = it === 'metralhadora' ? { type: it, t: 15, max: 15 } : it === 'foguete' ? { type: it, ammo: 2, t: 15, max: 15 } : { type: it, ammo: 3, t: 20, max: 20 };
       if (c === camTarget()) sfx.pickup();
       if (c === camTarget()) toast(`<span style="color:${ITEMS[it].color}">${ITEMS[it].icon} ${ITEMS[it].label}</span><br><small style="font-size:16px;opacity:.8">${p.n}</small>`);
       sparks(p.x, 1.3, p.z, 16, parseInt(ITEMS[it].color.slice(1), 16));
