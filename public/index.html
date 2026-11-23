@@ -1957,9 +1957,10 @@ function rebuildCar(car) {   // peças, rodas e faróis perdidos: monta o carro 
   scene.remove(old.root); old.root.traverse(o => { if (o.geometry && o !== car.tag) o.geometry.dispose(); });
   car.m = m;
 }
-function fixLook(car, gain) {
-  if (!car.m || !car.alive || !(gain > 0)) return;
-  const full = car.hp >= car.maxHp * .98, frac = full ? 1 : clamp(gain / car.maxHp * 2.2, 0, 1);
+function fixLook(car, gain, kit) {   // kit = chave de boca: conserto completo (peças, rodas, faróis, amassados)
+  if (!car.m || !car.alive || (!(gain > 0) && !kit)) return;
+  car.clean = true;   // parou de soltar fumaça até apanhar de novo
+  const full = kit || car.hp >= car.maxHp * .98, frac = full ? 1 : clamp(gain / car.maxHp * 2.2, 0, 1);
   const P = car.m.parts || {}, structural = car.m.lightsOut || Object.values(P).some(p => p.gone || p.sag) || (car.m.wheelMeta || []).some(w => w.gone);
   if (structural && frac >= .6) rebuildCar(car);
   else if (car.m.shells) for (const sh of car.m.shells) {
@@ -1973,7 +1974,7 @@ function fixLook(car, gain) {
   dmgLook(car);
   for (let k = 0; k < 16; k++) emit('add', car.x + rand(-1, 1), rand(.4, 1.6), car.z + rand(-1.5, 1.5), { vy: rand(1, 2.5), life: rand(.5, 1), s0: .14, s1: .04, color: 0x7dff9a });
 }
-function heal(car, amt) { const h0 = car.hp; car.hp = Math.min(car.maxHp, car.hp + amt); drawTag(car); fixLook(car, car.hp - h0); }
+function heal(car, amt, kit) { const h0 = car.hp; car.hp = Math.min(car.maxHp, car.hp + amt); drawTag(car); fixLook(car, car.hp - h0, kit); }
 function dmgLook(car) { car.m.paint.color.copy(car.m.baseColor).lerp(new THREE.Color(0x2a2620), (1 - car.hp / car.maxHp) * .55); }
 
 const CAUSE = { batida: '💥', metralhadora: '🔫', foguete: '🚀', mina: '💣', rio: '🌊', lago: '🌊', parede: '🧱' };
@@ -1984,7 +1985,7 @@ function damage(car, amt, src, cause) {
   if (!car.alive || state !== 'play') return;
   if (car.remote) return;   // online: quem desconta a vida é o celular dono do carro
   if (car.fx.escudo > 0) { car.m.shield.material.opacity = .6; return; }
-  car.hp -= amt; if (src && src !== car) { car.lastHitBy = src; car.lastHitTime = now; }
+  car.hp -= amt; car.clean = false; if (src && src !== car) { car.lastHitBy = src; car.lastHitTime = now; }
   if (car.hp < car.maxHp * .35) crackGlass(car);
   drawTag(car); dmgLook(car);
   if (car === camTarget()) { $('vig').style.opacity = clamp(amt / 25, .25, .9); }
@@ -2198,7 +2199,7 @@ function updPickups(dt) {
       if (!c.alive || c.remote || Math.hypot(c.x - p.x, c.z - p.z) > 3) continue;
       const it = p.item;
       if (NET.on) netSend({ t: 'pick', i: pickups.indexOf(p), id: c.id, item: it });
-      if (it === 'reparo') heal(c, 45);
+      if (it === 'reparo') heal(c, 45, true);
       else if (it === 'espinhos' || it === 'nitro' || it === 'escudo') c.fx[it] = { espinhos: 9, nitro: 5, escudo: 6 }[it];
       else c.weapon = it === 'metralhadora' ? { type: it, t: 20, max: 20 } : it === 'foguete' ? { type: it, ammo: 2, t: 20, max: 20 } : { type: it, ammo: 3, t: 20, max: 20 };
       if (c === camTarget()) sfx.pickup();
@@ -2223,12 +2224,17 @@ function aiInput(c, dt) {
   const wantRep = c.hp < c.maxHp * .45, wantW = !c.weapon && c.fx.espinhos <= 0;
   let best = null, bs = 1e9;
   for (const p of pickups) {
-    if (!p.active) continue; if (p.item === 'reparo' && c.hp > c.maxHp * .8) continue;
+    if (!p.active || (ai.skip && ai.skip.get(p) > now)) continue; if (p.item === 'reparo' && c.hp > c.maxHp * .8) continue;
     let s = Math.hypot(p.x - c.x, p.z - c.z); if (p.item === 'reparo' && wantRep) s *= .4; else if (!wantW) s *= 2.5;
     if (p.n === 'Mirante do Boto') s *= 1.8;
     if (s < bs) { bs = s; best = p; }
   }
-  if (best && bs < Math.min(95, dT + 25)) { gx = best.x; gz = best.z; }
+  if (best && bs < Math.min(95, dT + 25)) {
+    gx = best.x; gz = best.z;
+    if (Math.hypot(gx - c.x, gz - c.z) < 14) ai.nearT = (ai.goalP === best ? ai.nearT || 0 : 0) + dt; else ai.nearT = 0;
+    ai.goalP = best;
+    if (ai.nearT > 3) { (ai.skip = ai.skip || new Map()).set(best, now + 20); ai.nearT = 0; ai.path = null; }   // rodando em volta sem pegar: desiste por um tempo
+  }
   ai.navT -= dt;
   if (ai.navT <= 0) {
     ai.navT = rand(.7, 1.1);
@@ -2250,6 +2256,7 @@ function aiInput(c, dt) {
   }
   inp.steer = clamp(-diff * 2.2 + rand(-.08, .08), -1, 1);
   if (Math.abs(diff) > 1.3 && c.speed > 13) inp.throttle = .25;
+  if (ai.nearT > 0 && Math.abs(diff) > .7) inp.throttle = Math.min(inp.throttle, .35);   // perto do item: curva fechada devagar
   if (Math.abs(diff) > 2.1 && c.speed > 7) inp.brake = true;
   if (ai.revT > 0) { ai.revT -= dt; inp.throttle = -1; inp.steer = -ai.revSteer; inp.brake = false; }
   else { if (Math.abs(c.speed) < 2.5) ai.stuckT += dt; else ai.stuckT = 0; if (ai.stuckT > 1) { ai.revT = rand(.8, 1.4); ai.stuckT = 0; ai.revSteer = inp.steer >= 0 ? 1 : -1; } }
@@ -2284,8 +2291,8 @@ function updCar(c, dt) {
     c.puffT -= dt;
     if (c.puffT <= 0) {
       c.puffT = .07; const fx = Math.sin(c.h), fz = Math.cos(c.h); const r = c.hp / c.maxHp;
-      if (r < .45) emit('norm', c.x + fx * 1.4, 1.1, c.z + fz * 1.4, { vy: 2.5, vx: rand(-.5, .5), vz: rand(-.5, .5), life: 1.4, s0: .4, s1: 1.8, op: r < .2 ? .7 : .4, color: r < .2 ? 0x1e1c1a : 0x7a7570 });
-      if (r < .2) emit('add', c.x + fx * 1.5, 1, c.z + fz * 1.5, { vy: 2, life: .35, s0: .4, s1: .1, color: 0xff7a1a });
+      if (r < .45 && !c.clean) emit('norm', c.x + fx * 1.4, 1.1, c.z + fz * 1.4, { vy: 2.5, vx: rand(-.5, .5), vz: rand(-.5, .5), life: 1.4, s0: .4, s1: 1.8, op: r < .2 ? .7 : .4, color: r < .2 ? 0x1e1c1a : 0x7a7570 });
+      if (r < .2 && !c.clean) emit('add', c.x + fx * 1.5, 1, c.z + fz * 1.5, { vy: 2, life: .35, s0: .4, s1: .1, color: 0xff7a1a });
       if ((c.surf === 3 || c.surf === 4) && Math.abs(c.speed) > 6) for (const s of [-1, 1]) emit('norm', c.x - fx * 1.6 - fz * .7 * s, .3, c.z - fz * 1.6 + fx * .7 * s, { vy: 1, vx: rand(-.5, .5), life: 1.8, s0: .5, s1: 2.8, op: Math.min(.45, Math.abs(c.speed) / 60), color: 0xb07a52 });
       if (Math.abs(c.slip) > 4.5) for (const s of [-1, 1]) emit('norm', c.x - fx * 1.3 - fz * .8 * s, .25, c.z - fz * 1.3 + fx * .8 * s, { vy: .8, life: .9, s0: .3, s1: 1.4, op: .3, color: 0xb59a7e });
     }
@@ -2999,7 +3006,7 @@ function netOn(m) {
       for (const e of m.c) {
         const c = byId(e[0]); if (!c || !c.remote || !c.alive) continue;
         const b = c.net.buf; b.push({ t, x: e[1], z: e[2], h: e[3], sp: e[4], vx: e[5], vz: e[6], st: e[9], sl: e[10], thr: e[11], y: e[12] }); if (b.length > 12) b.shift();
-        if (c.hp !== e[7]) { const gain = e[7] - c.hp; c.hp = e[7]; drawTag(c); dmgLook(c); if (gain > 4) fixLook(c, gain); if (c.hp < c.maxHp * .35) crackGlass(c); }
+        if (c.hp !== e[7]) { const gain = e[7] - c.hp; if (gain < 0) c.clean = false; c.hp = e[7]; drawTag(c); dmgLook(c); if (gain > 4) fixLook(c, gain); if (c.hp < c.maxHp * .35) crackGlass(c); }
         c.fx.espinhos = e[8] & 1 ? .5 : 0; c.fx.nitro = e[8] & 2 ? .5 : 0; c.fx.escudo = e[8] & 4 ? .5 : 0;
         c.weapon = e[13] ? { type: e[13], t: 1, max: 1 } : null;
       }
@@ -3019,7 +3026,8 @@ function netOn(m) {
       const p = pickups[m.i]; if (!p || !p.active) break;
       p.active = false; p.g.visible = false; p.t = rand(12, 18);
       sparks(p.x, 1.3, p.z, 16, parseInt(ITEMS[m.item].color.slice(1), 16));
-      const c = byId(m.id); if (c && c === camTarget()) toast(`<span style="color:${ITEMS[m.item].color}">${ITEMS[m.item].icon} ${ITEMS[m.item].label}</span>`);
+      const c = byId(m.id); if (c && m.item === 'reparo') fixLook(c, 0, true);
+      if (c && c === camTarget()) toast(`<span style="color:${ITEMS[m.item].color}">${ITEMS[m.item].icon} ${ITEMS[m.item].label}</span>`);
       break;
     }
     case 'pspawn': if (pickups[m.i]) setPickup(pickups[m.i], m.item, m.x, m.z); break;
@@ -3078,7 +3086,7 @@ function netBoot() {
     netMsg(`Você foi convidado para a sala <b>${q.toUpperCase()}</b>: escolha seu carro, confira seu nome e toque em <b>Entrar na sala</b>.`);
   }
 }
-window.__netDbg = { heal: (c, a) => heal(c, a), impactAt, wreckParts: c => { for (const n in c.m.parts) detachPart(c, n, 1, 0); lightsOut(c); }, pk: () => pickups.map(p => [p.n, p.x | 0, p.z | 0, p.item, p.active]), go: () => { countT = .01; }, NET, cars: () => cars, player: () => player, damage, keys, touch, st: () => state, pickups };
+window.__netDbg = { loseWheel: (c, i) => loseWheel(c, c.m.wheelMeta[i]), heal: (c, a) => heal(c, a), impactAt, wreckParts: c => { for (const n in c.m.parts) detachPart(c, n, 1, 0); lightsOut(c); }, pk: () => pickups.map(p => [p.n, p.x | 0, p.z | 0, p.item, p.active]), go: () => { countT = .01; }, NET, cars: () => cars, player: () => player, damage, keys, touch, st: () => state, pickups };
 
 /* ============================ MENU / PARTIDA ============================ */
 let chosen = 'eletrico';
