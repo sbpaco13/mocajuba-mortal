@@ -1540,8 +1540,17 @@ function buildCarMesh(def) {
     box(W * .8, .06, .05, tl, 0, c.tailY - .2, rz - .005);
     box(W * .66, .04, .2, gloss, 0, c.roofRY + .01, c.roofRU - .02);
     box(1.1, .12, .05, gloss, 0, c.rbY + .1, rz);
-  } else if (c.style === 'mono') {         // alto, faróis redondos, sorriso na grade
-    for (const sx of [-1, 1]) { roundLamp(sx, .55, c.noseY - .14, .13); box(.1, .3, .06, tl, sx * (W * .43 - .06), c.tailY - .3, rz - .005, 0, sx * .35, 0); }
+  } else if (c.style === 'mono') {         // alto, faróis em triângulo, sorriso na grade
+    for (const sx of [-1, 1]) {   // farol em triângulo: estreito perto da grade, abrindo e subindo para a lateral
+      const tri = (sc) => { const sh = new THREE.Shape(); let P = [[.3, -.2], [.33, -.09], [.8, .03], [.76, -.16]].map(([x, y]) => [sx * (x * sc + (1 - sc) * .58), y * sc + (1 - sc) * -.1]); if (sx > 0) P = P.reverse();
+        sh.moveTo(P[0][0], P[0][1]); for (const q of P.slice(1)) sh.lineTo(q[0], q[1]); sh.closePath(); return sh; };
+      for (const [sc, mat, dz, dep] of [[1, hlHouse, 0, .05], [.78, hl, .04, .02]]) {
+        const g = new THREE.ExtrudeGeometry(tri(sc), { depth: dep, bevelEnabled: true, bevelSize: .012, bevelThickness: .012, bevelSegments: 2 });
+        const m = new THREE.Mesh(g, mat); m.position.set(0, c.noseY - .06, L2 + .03 + dz); body.add(m);
+      }
+      const pj = new THREE.Mesh(new THREE.CylinderGeometry(.045, .045, .03, 16).rotateX(Math.PI / 2), lensM); pj.position.set(sx * .5, c.noseY - .14, L2 + .1); body.add(pj);
+      box(.1, .3, .06, tl, sx * (W * .43 - .06), c.tailY - .3, rz - .005, 0, sx * .35, 0);
+    }
     box(.7, .1, .04, gridM, 0, c.fbY + .3, fz, 0, 0, 0);
     box(1.0, .14, .05, gloss, 0, c.fbY + .13, fz);
     box(1.1, .12, .05, gloss, 0, c.rbY + .1, rz);
@@ -3086,7 +3095,7 @@ function netBoot() {
     netMsg(`Você foi convidado para a sala <b>${q.toUpperCase()}</b>: escolha seu carro, confira seu nome e toque em <b>Entrar na sala</b>.`);
   }
 }
-window.__netDbg = { loseWheel: (c, i) => loseWheel(c, c.m.wheelMeta[i]), heal: (c, a) => heal(c, a), impactAt, wreckParts: c => { for (const n in c.m.parts) detachPart(c, n, 1, 0); lightsOut(c); }, pk: () => pickups.map(p => [p.n, p.x | 0, p.z | 0, p.item, p.active]), go: () => { countT = .01; }, NET, cars: () => cars, player: () => player, damage, keys, touch, st: () => state, pickups };
+window.__netDbg = { healKit: c => heal(c, 45, true), loseWheel: (c, i) => loseWheel(c, c.m.wheelMeta[i]), heal: (c, a) => heal(c, a), impactAt, wreckParts: c => { for (const n in c.m.parts) detachPart(c, n, 1, 0); lightsOut(c); }, pk: () => pickups.map(p => [p.n, p.x | 0, p.z | 0, p.item, p.active]), go: () => { countT = .01; }, NET, cars: () => cars, player: () => player, damage, keys, touch, st: () => state, pickups };
 
 /* ============================ MENU / PARTIDA ============================ */
 let chosen = 'eletrico';
