@@ -35,7 +35,7 @@ function broadcast(room, msg, exceptId) { const s = JSON.stringify(msg); for (co
 const clean = (s, n) => String(s || '').replace(/[<>&"]/g, '').trim().slice(0, n);
 
 // mensagens de jogo que o servidor apenas repassa para os outros da sala
-const RELAY = new Set(['s', 'imp', 'fire', 'boom', 'dead', 'pick', 'pspawn', 'mine', 'mineX', 'hit', 'end', 'chat']);
+const RELAY = new Set(['s', 'imp', 'fire', 'boom', 'dead', 'pick', 'pspawn', 'mine', 'mineX', 'hit', 'end', 'chat', 'boto']);
 
 wss.on('connection', ws => {
   const me = { id: nextId++, name: 'Jogador', car: 'eletrico', ws, room: null };

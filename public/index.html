@@ -2068,12 +2068,81 @@ function createCar(key, name, isPlayer, x, z, h, o = {}) {
   cars.push(car); return car;
 }
 // ---- conserto visual: ao recuperar vida o carro também se recupera ----
+// ---- Boto cor-de-rosa: ao juntar MO·CA·JU·BA o carro vira um boto de verdade sobre rodas ----
+function botoify(car) {
+  const m = car.m, d = car.def, L2 = d.L / 2, W = d.W, pink = 0xff8fc7;
+  m.baseColor.set(pink); m.paint.color.set(pink);
+  if (m.boto) return;
+  for (const o of m.body.children) o.visible = false;   // some o formato de carro
+  const skin = new THREE.MeshStandardMaterial({ color: pink, roughness: .45 }), belly = new THREE.MeshStandardMaterial({ color: 0xffd0e6, roughness: .5 });
+  const eye = new THREE.MeshStandardMaterial({ color: 0x1a1016, roughness: .2 });
+  const g = new THREE.Group(), add = (geo, mat, x, y, z, rx = 0, ry = 0, rz = 0) => { const o = new THREE.Mesh(geo, mat); o.position.set(x, y, z); o.rotation.set(rx, ry, rz); o.castShadow = true; g.add(o); return o; };
+  const cy = d.wr + .45, len = d.L + .2, rMax = Math.min(.72, W * .42);
+  // corpo: fuso comprido, mais grosso na frente, afinando até a cauda
+  const prof = [[.0, 0], [.1, .04], [.2, .1], [.38, .2], [.58, .34], [.78, .48], [.9, .58], [1, .62], [.97, .72], [.9, .82], [.78, .9], [.6, .95], [.38, .98], [0, 1]];
+  const body = new THREE.LatheGeometry(prof.map(([r, t]) => new THREE.Vector2(Math.max(.001, r * rMax), (t - .5) * len)), 28);
+  body.rotateX(Math.PI / 2); body.scale(1, .82, 1);
+  add(body, skin, 0, cy, -.1);
+  // barriga mais clara
+  const bel = new THREE.LatheGeometry(prof.map(([r, t]) => new THREE.Vector2(Math.max(.001, r * rMax * .9), (t - .5) * len * .86)), 20, Math.PI * .7, Math.PI * .6);
+  bel.rotateX(Math.PI / 2); bel.scale(1, .82, 1);
+  add(bel, belly, 0, cy - .06, -.05);
+  const zF = -.1 + len / 2;   // ponta da frente do corpo
+  // testa redonda (melão), bico e olhos
+  add(new THREE.SphereGeometry(rMax * .72, 20, 14).scale(1, .9, 1.1), skin, 0, cy + .12, zF - .25);
+  add(new THREE.CylinderGeometry(.07, .17, 1.0, 14).rotateX(Math.PI / 2), skin, 0, cy - .08, zF + .35);
+  add(new THREE.SphereGeometry(.075, 10, 8), skin, 0, cy - .08, zF + .85);
+  add(new THREE.CylinderGeometry(.04, .13, .85, 12).rotateX(Math.PI / 2), belly, 0, cy - .17, zF + .3);
+  for (const sx of [-1, 1]) {
+    add(new THREE.SphereGeometry(.07, 10, 8), eye, sx * rMax * .62, cy + .02, zF - .05);
+    const fin = new THREE.Shape(); fin.moveTo(0, 0); fin.quadraticCurveTo(.4, -.05, .7, -.38); fin.quadraticCurveTo(.3, -.3, 0, -.22); fin.closePath();
+    const fg = new THREE.ExtrudeGeometry(fin, { depth: .05, bevelEnabled: true, bevelSize: .015, bevelThickness: .015, bevelSegments: 2 }); fg.rotateY(sx > 0 ? -Math.PI / 2 : Math.PI / 2);
+    add(fg, skin, sx * rMax * .8, cy - .2, zF - .9, 0, 0, sx * -.5);                         // nadadeiras do peito
+  }
+  // sorriso: linha da boca colada na pele, correndo pelo bico e subindo em curva na bochecha
+  { g.updateMatrixWorld(true); const hit = g.children.filter(o => o.material === skin), rc = new THREE.Raycaster();
+    for (const sx of [-1, 1]) {
+      const pts = [];
+      for (const [y, z] of [[-.13, .5], [-.14, .3], [-.15, .12], [-.14, -.02], [-.1, -.12], [-.04, -.2], [.0, -.24]]) {
+        rc.set(new THREE.Vector3(sx * 2, cy + y, zF + z), new THREE.Vector3(-sx, 0, 0)); const h = rc.intersectObjects(hit, false)[0];
+        if (h) pts.push(h.point.clone().add(new THREE.Vector3(sx * .012, 0, 0)));
+      }
+      if (pts.length > 2) {
+        const cv = new THREE.CatmullRomCurve3(pts);
+        g.add(new THREE.Mesh(new THREE.TubeGeometry(cv, 30, .026, 6, false), eye)); const e = pts[pts.length - 1]; add(new THREE.SphereGeometry(.036, 8, 6), eye, e.x, e.y, e.z);
+      }
+    } }
+  // barbatana das costas (baixa e comprida)
+  const dor = new THREE.Shape(); dor.moveTo(-.6, 0); dor.quadraticCurveTo(-.1, .36, .25, .3); dor.quadraticCurveTo(.38, .12, .6, 0); dor.closePath();
+  const dg = new THREE.ExtrudeGeometry(dor, { depth: .08, bevelEnabled: true, bevelSize: .02, bevelThickness: .02, bevelSegments: 2 }); dg.translate(0, 0, -.04); dg.rotateY(Math.PI / 2);
+  add(dg, skin, 0, cy + rMax * .78, -.35);
+  // cauda com as duas nadadeiras na horizontal
+  // nadadeira da cauda: duas pontas abertas para trás, com o chanfro no meio (vista de cima parece um "V" largo)
+  const tail = new THREE.Shape(); tail.moveTo(-.1, -.05); tail.lineTo(.1, -.05);
+  tail.quadraticCurveTo(.45, .05, .8, .5); tail.quadraticCurveTo(.55, .5, .4, .42); tail.quadraticCurveTo(.18, .34, 0, .3);
+  tail.quadraticCurveTo(-.18, .34, -.4, .42); tail.quadraticCurveTo(-.55, .5, -.8, .5); tail.quadraticCurveTo(-.45, .05, -.1, -.05);
+  const tg = new THREE.ExtrudeGeometry(tail, { depth: .07, bevelEnabled: true, bevelSize: .015, bevelThickness: .015, bevelSegments: 2 }); tg.translate(0, 0, -.035); tg.rotateX(-Math.PI / 2);
+  add(tg, skin, 0, cy + .1, -.1 - len / 2 + .12);
+  add(new THREE.CylinderGeometry(.07, .13, .45, 12).rotateX(Math.PI / 2), skin, 0, cy + .08, -.1 - len / 2 + .1);   // pedúnculo ligando o corpo à cauda
+  // chapéu panamá branco (estilo Pralana) em cima da cabeça
+  { const hat = new THREE.Group(), straw = new THREE.MeshStandardMaterial({ color: 0xf6f3ea, roughness: .8 }), band = new THREE.MeshStandardMaterial({ color: 0x1b1b1b, roughness: .5 });
+    const brim = new THREE.Mesh(new THREE.CylinderGeometry(.52, .52, .03, 32), straw); brim.scale.set(1, 1, .9); hat.add(brim);
+    const cr = new THREE.LatheGeometry([[.3, 0], [.31, .02], [.3, .16], [.27, .27], [.17, .31], [0, .3]].map(([r, y]) => new THREE.Vector2(r, y)), 28);
+    const crown = new THREE.Mesh(cr, straw); crown.scale.set(1, 1, .86); hat.add(crown);
+    const dent = new THREE.Mesh(new THREE.BoxGeometry(.06, .06, .36), straw); dent.position.set(0, .28, 0); hat.add(dent);   // vinco no topo
+    const fita = new THREE.Mesh(new THREE.CylinderGeometry(.312, .312, .07, 28, 1, true), band); fita.scale.set(1, 1, .86); fita.position.y = .055; hat.add(fita);
+    for (const o of hat.children) o.castShadow = true;
+    const zH = zF - .3; hat.position.set(0, cy + .12 + rMax * .72 * .9 - .04, zH); hat.rotation.set(-.12, 0, .06);
+    g.add(hat); }
+  m.body.add(g); m.boto = g; if (TOON) toonify(g);
+}
 function rebuildCar(car) {   // peças, rodas e faróis perdidos: monta o carro de novo
   const old = car.m, m = buildCarMesh(car.def); scene.add(m.root);
   m.root.position.copy(old.root.position); m.root.quaternion.copy(old.root.quaternion); m.root.scale.copy(old.root.scale);
   if (car.tag) m.root.add(car.tag);
   scene.remove(old.root); old.root.traverse(o => { if (o.geometry && o !== car.tag) o.geometry.dispose(); });
   car.m = m;
+  if (car.pink) botoify(car);   // o boto continua boto depois do conserto
 }
 function fixLook(car, gain, kit) {   // kit = chave de boca: conserto completo (peças, rodas, faróis, amassados)
   if (!car.m || !car.alive || (!(gain > 0) && !kit)) return;
@@ -2477,10 +2546,12 @@ function updCamera(dt) {
 }
 
 /* ============================ EASTER EGGS ============================ */
-const WORD = 'MOCAJUBA';
+const WORD = ['MO', 'CA', 'JU', 'BA'];   // sílabas espalhadas pela cidade
 const EGG = { letters: [], got: 0, ghostCd: 0, portalCd: 0, sign: null, signUp: false, rewarded: false };
 function letterTex(ch) {
-  const t = canvasTex(128, 128, (g) => { g.clearRect(0, 0, 128, 128); g.font = 'bold 110px Rajdhani, Impact, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.lineWidth = 10; g.strokeStyle = '#7a1f5a'; g.strokeText(ch, 64, 70); g.fillStyle = '#ff9ad5'; g.fillText(ch, 64, 70); });
+  const t = canvasTex(256, 128, (g) => { g.clearRect(0, 0, 256, 128); g.font = 'bold 110px Rajdhani, Impact, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    const sc = Math.min(1, 236 / g.measureText(ch).width); g.save(); g.translate(128, 70); g.scale(sc, 1);
+    g.lineWidth = 10; g.strokeStyle = '#7a1f5a'; g.strokeText(ch, 0, 0); g.fillStyle = '#ff9ad5'; g.fillText(ch, 0, 0); g.restore(); });
   t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping; return t;
 }
 // 1) Visagem do cemitério: fantasma junto ao portão (lado da Travessa Miguel de Almeida)
@@ -2535,7 +2606,7 @@ function resetSign() {
   g.position.set(SIGN_G.x, 0, SIGN_G.z); g.rotation.y = SIGN_G.ry; scene.add(g);
   EGG.sign = g; EGG.signUp = true;
 }
-// 4) Letras M-O-C-A-J-U-B-A espalhadas pela cidade
+// 4) Sílabas MO-CA-JU-BA espalhadas pela cidade
 // 5) Placas vermelhas de AÇAÍ nas calçadas: passar por cima recupera vida
 const ACAI = { list: [], N: 8 };
 const ACAI_DONOS = ['do Bira', 'da Neca', 'do Zé', 'da Socorro', 'do Tonhão', 'da Dona Raimunda', 'do Dico', 'fresquinho', 'grosso', 'da ilha'];
@@ -2598,7 +2669,7 @@ function setupEggs() {
   const chosen = []; for (const n of cand) { if (chosen.every(c => Math.hypot(c.x - n.x, c.z - n.z) > 90) && Math.hypot(player.x - n.x, player.z - n.z) > 40) chosen.push(n); if (chosen.length === WORD.length) break; }
   chosen.forEach((n, i) => {
     const g = new THREE.Group();
-    const pl = new THREE.Mesh(new THREE.PlaneGeometry(2.2, 2.2), new THREE.MeshBasicMaterial({ map: letterTex(WORD[i]), transparent: true, side: THREE.DoubleSide, depthWrite: false, fog: false }));
+    const pl = new THREE.Mesh(new THREE.PlaneGeometry(3.6, 1.8), new THREE.MeshBasicMaterial({ map: letterTex(WORD[i]), transparent: true, side: THREE.DoubleSide, depthWrite: false, fog: false }));
     pl.position.y = 2.4; g.add(pl);
     const ring = new THREE.Mesh(new THREE.RingGeometry(1.2, 1.5, 28).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xff7ac0, transparent: true, opacity: .55, blending: THREE.AdditiveBlending, depthWrite: false }));
     ring.position.y = .07; g.add(ring);
@@ -2609,7 +2680,7 @@ function setupEggs() {
 }
 function drawEggHud() {
   const el = $('eggL'); if (!el) return;
-  el.innerHTML = EGG.got ? WORD.split('').map((ch, i) => { const l = EGG.letters[i]; return `<span style="color:${l && l.got ? '#ff9ad5' : 'rgba(255,255,255,.25)'}">${l && l.got ? ch : '_'}</span>`; }).join(' ') : '';
+  el.innerHTML = EGG.got ? WORD.map((ch, i) => { const l = EGG.letters[i]; return `<span style="color:${l && l.got ? '#ff9ad5' : 'rgba(255,255,255,.25)'}">${l && l.got ? ch : '__'}</span>`; }).join('·') : '';
 }
 function updEggs(dt) {
   updAcai(dt);
@@ -2622,11 +2693,11 @@ function updEggs(dt) {
       l.got = true; l.g.visible = false; EGG.got++;
       sparks(l.x, 2, l.z, 24, 0xff8fc7);
       sfx.chime();
-      toast(`<span style="color:#ff9ad5">🔤 Letra "${l.ch}" · ${EGG.got}/${WORD.length}</span>`, 1.6);
+      toast(`<span style="color:#ff9ad5">🔤 Sílaba "${l.ch}" · ${EGG.got}/${WORD.length}</span>`, 1.6);
       drawEggHud();
       if (EGG.got === WORD.length && !EGG.rewarded) {
         EGG.rewarded = true;
-        p.m.baseColor.set(0xff8fc7); p.m.paint.color.set(0xff8fc7); p.hp = p.maxHp; drawTag(p);
+        p.pink = 0xff8fc7; botoify(p); p.hp = p.maxHp; drawTag(p); if (NET.on) netSend({ t: 'boto', id: p.id });
         p.fx.nitro = 12; p.fx.espinhos = 12;
         sfx.fanfare();
         big('MOCAJUBA!<small>🐬 Você virou o Boto cor-de-rosa</small>', 3.5);
@@ -2944,7 +3015,7 @@ window.__engineDemo = async (ev, sp0) => {
 };
 window.__sfx = () => ({ state: SFX.ctx && SFX.ctx.state, engines: SFX.eng.size, on: SFX.on });
 window.__mapDbg = { sdf, cls, G, B, inBounds, gN };
-window.__carDbg = { buildCarMesh, CARS, THREE, RoomEnvironment, impactAt, wreck, debris, updDebris, pl: () => player };
+window.__carDbg = { botoify, buildCarMesh, CARS, THREE, RoomEnvironment, impactAt, wreck, debris, updDebris, pl: () => player };
 window.__tp = (x, z, h) => { if (player) { player.x = x; player.z = z; player.h = h; player.vx = player.vz = 0; } };
 window.__sim = n => { for (let i = 0; i < n; i++) tick(1 / 60, false); };
 function tick(dt, draw) {
@@ -3148,6 +3219,7 @@ function netOn(m) {
       if (c && c === camTarget()) toast(`<span style="color:${ITEMS[m.item].color}">${ITEMS[m.item].icon} ${ITEMS[m.item].label}</span>`);
       break;
     }
+    case 'boto': { const c = byId(m.id); if (c && c.alive) { c.pink = 0xff8fc7; botoify(c); } break; }
     case 'pspawn': if (pickups[m.i]) setPickup(pickups[m.i], m.item, m.x, m.z); break;
   }
 }
