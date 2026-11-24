@@ -3117,9 +3117,9 @@ function drawMini() {
   const P = (x, z) => [clamp(x - ox, 8, MS - 8), clamp(z - oz, 8, MS - 8)];
   if (ZONE.on) {   // fumaça: escurece fora do círculo, linha laranja na borda atual e tracejado branco na próxima
     const zx = ZONE.x - ox, zz = ZONE.z - oz, zr = Math.max(ZONE.r, 0);
-    mg.save(); mg.beginPath(); mg.rect(0, 0, MS, MS); mg.arc(zx, zz, zr, 0, 7, true); mg.fillStyle = 'rgba(70,45,30,.55)'; mg.fill('evenodd');
-    mg.lineWidth = 4; mg.strokeStyle = '#ff7a2f'; mg.beginPath(); mg.arc(zx, zz, zr, 0, 7); mg.stroke();
-    if (ZONE.next < ZONE.r - 1 && ZONE.next > 0) { mg.setLineDash([10, 8]); mg.lineWidth = 2.5; mg.strokeStyle = '#fff'; mg.beginPath(); mg.arc(zx, zz, ZONE.next, 0, 7); mg.stroke(); mg.setLineDash([]); }
+    mg.save(); mg.beginPath(); mg.rect(0, 0, MS, MS); mg.moveTo(zx + zr, zz); mg.arc(zx, zz, zr, 0, Math.PI * 2, true); mg.closePath(); mg.fillStyle = 'rgba(70,45,30,.55)'; mg.fill('evenodd');
+    mg.lineWidth = 4; mg.strokeStyle = '#ff7a2f'; mg.beginPath(); mg.arc(zx, zz, zr, 0, Math.PI * 2); mg.stroke();
+    if (ZONE.next < ZONE.r - 1 && ZONE.next > 0) { mg.setLineDash([10, 8]); mg.lineWidth = 2.5; mg.strokeStyle = '#fff'; mg.beginPath(); mg.arc(zx, zz, ZONE.next, 0, Math.PI * 2); mg.stroke(); mg.setLineDash([]); }
     if (Math.hypot(t.x - ZONE.x, t.z - ZONE.z) > zr - 10) { const a = Math.atan2(zz - MS / 2, zx - MS / 2); mg.strokeStyle = '#ff7a2f'; mg.lineWidth = 3; mg.setLineDash([6, 6]); mg.beginPath(); mg.moveTo(MS / 2, MS / 2); mg.lineTo(MS / 2 + Math.cos(a) * 170, MS / 2 + Math.sin(a) * 170); mg.stroke(); mg.setLineDash([]); }
     mg.restore();
   }
