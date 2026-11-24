@@ -1429,6 +1429,7 @@ function carTextures() {
   CARTEX.shadow = (() => { const t = canvasTex(128, 128, (g, w, h) => { const gr = g.createRadialGradient(64, 64, 6, 64, 64, 64); gr.addColorStop(0, 'rgba(0,0,0,.75)'); gr.addColorStop(.6, 'rgba(0,0,0,.4)'); gr.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = gr; g.fillRect(0, 0, w, h); }); t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping; return t; })();
   return CARTEX;
 }
+const LAMP_CACHE = new Map();
 function buildCarMesh(def) {
   const CT = carTextures();
   const c = def, L2 = c.L / 2, W = c.W, fa = L2 - c.fo, ra = fa - c.wb, R = c.wr + .07, sill = c.clear + .13;
@@ -1593,7 +1594,12 @@ function buildCarMesh(def) {
 const wrapLamp = (sx, o) => {
     root.updateMatrixWorld(true);
     const hull = body.children.filter(o => o.userData.shell && !o.userData.glass), rc = new THREE.Raycaster();
-    const surf = (x, y, z, dx, dz) => {   // ponto da lataria visto de fora na direção (dx, dz)
+    const surf = (x, y, z, dx, dz) => {   // guardado em cache por modelo: os raios contra a lataria são caros (evita travada no conserto)
+      const ck = c.name + '|' + sx + '|' + x.toFixed(3) + '|' + y.toFixed(3) + '|' + z.toFixed(3) + '|' + dx.toFixed(2) + '|' + dz.toFixed(2);
+      if (LAMP_CACHE.has(ck)) { const v = LAMP_CACHE.get(ck); return v && v.clone(); }
+      const v = surf0(x, y, z, dx, dz); LAMP_CACHE.set(ck, v && v.clone()); return v;
+    };
+    const surf0 = (x, y, z, dx, dz) => {   // ponto da lataria visto de fora na direção (dx, dz)
       rc.set(new THREE.Vector3(sx * x - dx * sx * 3, y, z - dz * 3), new THREE.Vector3(dx * sx, 0, dz).normalize());
       const h = rc.intersectObjects(hull, false)[0]; if (!h) return null;
       const n = h.face.normal.clone().transformDirection(h.object.matrixWorld);
@@ -2138,7 +2144,7 @@ function botoify(car) {
 }
 function rebuildCar(car) {   // peças, rodas e faróis perdidos: monta o carro de novo
   const old = car.m, m = buildCarMesh(car.def); scene.add(m.root);
-  m.root.position.copy(old.root.position); m.root.quaternion.copy(old.root.quaternion); m.root.scale.copy(old.root.scale);
+  m.root.position.copy(old.root.position); m.root.rotation.set(0, car.h, 0);   // só o giro no chão (copiar o quaternion virava o carro de ponta-cabeça)
   if (car.tag) m.root.add(car.tag);
   scene.remove(old.root); old.root.traverse(o => { if (o.geometry && o !== car.tag) o.geometry.dispose(); });
   car.m = m;
