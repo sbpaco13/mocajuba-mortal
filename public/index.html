@@ -598,6 +598,21 @@ const CASA225 = (() => {
   }
   return null;
 })();
+// 6d) Comercial Lisboa — Tv. Miguel de Almeida, lado norte, entre a Rua Manoel de Souza Furtado e a Passagem (esquina com a Passagem)
+const LISBOA = (() => {
+  const A = [427, 291], B = [447, 297], L = Math.hypot(B[0] - A[0], B[1] - A[1]), u = [(B[0] - A[0]) / L, (B[1] - A[1]) / L], n = [-u[1], u[0]], off = RW.residential + 2.4;
+  for (const W of [17, 15, 13, 11]) for (const D of [11, 9]) for (const sh of [0, 1, -1, 2, -2, 3, -3, 4, -4]) {
+    const P = [A[0] + u[0] * (L / 2 + sh), A[1] + u[1] * (L / 2 + sh)];
+    const cx = P[0] - n[0] * (off + D / 2), cz = P[1] - n[1] * (off + D / 2);
+    const Q = (a, b) => [cx + u[0] * a + n[0] * b, cz + u[1] * a + n[1] * b];
+    const poly = [Q(-W / 2, -D / 2), Q(W / 2, -D / 2), Q(W / 2, D / 2), Q(-W / 2, D / 2)];
+    let ok = true; stampPoly(poly, i => { if (cls[i] !== 0 || solidM[i]) ok = false; });
+    if (!ok) continue;
+    stampPoly(poly, i => { resv[i] = 1; solidM[i] = 1; occ[i] = 1; });
+    return { x: cx, z: cz, W, D, ry: Math.atan2(n[0], n[1]) };
+  }
+  return null;
+})();
 // 7) árvores e coreto nas praças, letreiro na orla
 const plazaTrees = [];
 for (const [t, n, p] of OSM.poly) {
@@ -831,6 +846,87 @@ if (CASA225) {
   // plantas do jardim atrás do portão
   const folhaM = stdMat({ color: 0x3f7a35, roughness: .9 });
   for (const x of [2.3, 3.6, 5.2, 6.4]) put(new THREE.SphereGeometry(.45 + Math.random() * .2, 8, 6), folhaM, x, 2.75, fz - .4);
+}
+// Comercial Lisboa: sobrado amarelo, térreo com barra vermelha e portas abertas, toldo arredondado listrado, varanda com grade preta e telhado de barro
+window.__lisboa = LISBOA;
+if (LISBOA) {
+  const g = new THREE.Group(); g.position.set(LISBOA.x, 0, LISBOA.z); g.rotation.y = LISBOA.ry; scene.add(g);
+  const { W, D } = LISBOA, fz = D / 2, H1 = 3.5, H2 = 3.3, HT = H1 + H2;
+  const put = (geo, mat, x, y, z, cast = true) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.castShadow = cast; m.receiveShadow = true; g.add(m); return m; };
+  const tx = (w, h, draw) => { const t = canvasTex(w, h, draw); t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping; return t; };
+  const AM = '#f0c93a', VM = '#d0322b';
+  const amarelo = stdMat({ color: 0xf0c93a, roughness: .85 }), vermelho = stdMat({ color: 0xd0322b, roughness: .85 }), preto = stdMat({ color: 0x1b1b1b, roughness: .5, metalness: .3 });
+  // laterais e fundo: amarelo com barra vermelha embaixo
+  const sideT = tx(256, 256, (c, w, h) => { c.fillStyle = AM; c.fillRect(0, 0, w, h); c.fillStyle = VM; c.fillRect(0, h * .78, w, h * .22); c.fillStyle = 'rgba(0,0,0,.08)'; c.fillRect(0, h * .5 - 3, w, 6); });
+  const sideM = stdMat({ map: sideT, roughness: .85 });
+  put(new THREE.BoxGeometry(W, HT, D), [sideM, sideM, amarelo, amarelo, amarelo, sideM], 0, HT / 2, 0);
+  // fachada do térreo: pilares amarelos com base vermelha, vãos abertos com prateleiras, painel do letreiro
+  const bays = [[.02, .07, 'p'], [.07, .27, 'v'], [.27, .33, 'p'], [.33, .5, 'v'], [.5, .7, 's'], [.7, .84, 'v'], [.84, .98, 'p2']];
+  const frontT = tx(1024, 256, (c, w, h) => {
+    c.fillStyle = AM; c.fillRect(0, 0, w, h); c.fillStyle = VM; c.fillRect(0, h * .55, w, h * .45);
+    for (const [a, b, k] of bays) {
+      const x0 = a * w, x1 = b * w;
+      if (k === 'v') {
+        c.fillStyle = '#2a211c'; c.fillRect(x0, 14, x1 - x0, h - 14);
+        for (let y = 40; y < h - 30; y += 34) { c.fillStyle = '#5a4636'; c.fillRect(x0 + 6, y, x1 - x0 - 12, 5); for (let x = x0 + 10; x < x1 - 12; x += 9) { c.fillStyle = ['#e94b3c', '#3fa34d', '#f2c230', '#3b7dd8', '#f4f4f4', '#ff8a2a'][(x * 7 + y) % 6 | 0]; c.fillRect(x, y - 14, 6, 14); } }
+        c.fillStyle = 'rgba(255,230,170,.10)'; c.fillRect(x0, 14, x1 - x0, h - 14);
+      } else if (k === 's') {
+        c.fillStyle = AM; c.fillRect(x0, 14, x1 - x0, h * .82 - 14);
+        c.fillStyle = VM; c.textAlign = 'center'; c.textBaseline = 'middle';
+        const cx = (x0 + x1) / 2, bw = x1 - x0;
+        c.font = `bold ${bw * .2}px Impact, "Arial Black", sans-serif`;
+        c.font = `bold ${bw * .15}px Impact, "Arial Black", sans-serif`; const t = 'COMERCIAL'; for (let i = 0; i < t.length; i++) { const a2 = -.75 + 1.5 * i / (t.length - 1); c.save(); c.translate(cx + Math.sin(a2) * bw * .4, 150 - Math.cos(a2) * 46); c.rotate(a2 * .9); c.fillText(t[i], 0, 0); c.restore(); }
+        c.lineWidth = 4; c.strokeStyle = VM; c.beginPath(); c.ellipse(cx, 146, bw * .11, 14, 0, 0, 7); c.stroke(); c.font = `bold 19px Arial, sans-serif`; c.fillText('CL', cx, 147);
+        c.font = `bold ${bw * .22}px Impact, "Arial Black", sans-serif`; c.fillText('LISBOA', cx, 186);
+      }
+    }
+  });
+  put(new THREE.PlaneGeometry(W, H1), stdMat({ map: frontT, roughness: .8 }), 0, H1 / 2, fz + .01, false);
+  // toldo arredondado de telha ondulada, listras vermelho-claro e creme
+  const toldoT = tx(64, 1024, (c, w, h) => {
+    const n = Math.round(W / 1.6);
+    for (let i = 0; i < n; i++) { c.fillStyle = i % 2 ? '#efd28c' : '#d9705f'; c.fillRect(0, i * h / n, w, h / n + 1); }
+    for (let y = 0; y < h; y += 9) { c.fillStyle = 'rgba(0,0,0,.16)'; c.fillRect(0, y, w, 3); c.fillStyle = 'rgba(255,255,255,.12)'; c.fillRect(0, y + 4, w, 2); }
+  });
+  const R = 1.35, toldo = put(new THREE.CylinderGeometry(R, R, W + .3, 20, 1, true, 0, Math.PI / 2), stdMat({ map: toldoT, roughness: .6, side: THREE.DoubleSide }), 0, H1 - R + .55, fz);
+  toldo.rotation.z = Math.PI / 2;
+  // laje da varanda, guarda-corpo preto com arabescos e toalha rosa
+  put(new THREE.BoxGeometry(W + .3, .22, 1.5), amarelo, 0, H1 + .62, fz + .75);
+  const gradeT = tx(512, 128, (c, w, h) => {
+    c.clearRect(0, 0, w, h); c.strokeStyle = c.fillStyle = '#1b1b1b';
+    c.fillRect(0, 0, w, 7); c.fillRect(0, h - 8, w, 8); c.fillRect(0, 40, w, 4);
+    for (let x = 0; x < w; x += 64) { c.fillRect(x, 0, 5, h); }
+    c.lineWidth = 3; for (let x = 0; x < w; x += 32) { c.beginPath(); c.arc(x + 16, 72, 11, Math.PI, 2.4 * Math.PI); c.stroke(); c.beginPath(); c.arc(x + 16, 98, 11, 0, 1.4 * Math.PI); c.stroke(); c.beginPath(); c.moveTo(x + 16, 46); c.lineTo(x + 16, 61); c.stroke(); }
+  });
+  gradeT.wrapS = THREE.RepeatWrapping; gradeT.repeat.set(W / 4, 1);
+  const gradeM = stdMat({ map: gradeT, transparent: true, alphaTest: .4, side: THREE.DoubleSide, roughness: .5 });
+  const gH = 1.15, gy = H1 + .73 + gH / 2;
+  const gf = put(new THREE.PlaneGeometry(W + .3, gH), gradeM, 0, gy, fz + 1.48, false); gf.castShadow = true;
+  for (const sx of [-1, 1]) { const gs = put(new THREE.PlaneGeometry(1.5, gH), gradeM, sx * (W / 2 + .14), gy, fz + .75, false); gs.rotation.y = Math.PI / 2; }
+  put(new THREE.PlaneGeometry(1.3, .75), stdMat({ color: 0xec5fa8, roughness: .9, side: THREE.DoubleSide }), -W * .14, gy, fz + 1.5, false);
+  // janelas do andar de cima com grade vinho (a segunda é porta)
+  const janT = (porta) => tx(128, porta ? 220 : 128, (c, w, h) => {
+    c.fillStyle = '#7a1f1f'; c.fillRect(0, 0, w, h); c.fillStyle = '#3a1414'; c.fillRect(10, 10, w - 20, h - 20);
+    c.strokeStyle = '#8f2a2a'; c.lineWidth = 3; for (let x = 18; x < w - 10; x += 12) { c.beginPath(); c.moveTo(x, 10); c.lineTo(x, h - 10); c.stroke(); }
+    for (let y = 22; y < h - 10; y += 22) { c.beginPath(); c.moveTo(10, y); c.lineTo(w - 10, y); c.stroke(); }
+    c.beginPath(); c.arc(w / 2, h / 2, 18, 0, 7); c.stroke();
+  });
+  const jM = stdMat({ map: janT(false), roughness: .7 }), pM = stdMat({ map: janT(true), roughness: .7 });
+  for (const f of [-.36, .14, .36]) put(new THREE.PlaneGeometry(1.4, 1.4), jM, f * W, H1 + 1.9, fz + .01, false);
+  put(new THREE.PlaneGeometry(1.4, 2.4), pM, -.1 * W, H1 + 1.45, fz + .01, false);
+  // telhado de barro em quatro águas, beiral com forro marrom e calha branca
+  const ov = .9, rw = W + 2 * ov, rd = D + 2 * ov, rh = 2.1, r = Math.max(rw - rd, 0) / 2;
+  const vA = [-rw / 2, 0, -rd / 2], vB = [rw / 2, 0, -rd / 2], vC = [rw / 2, 0, rd / 2], vD = [-rw / 2, 0, rd / 2], R1 = [-r, rh, 0], R2 = [r, rh, 0];
+  const tri = [vD, vC, R2, vD, R2, R1, vB, vA, R1, vB, R1, R2, vA, vD, R1, vC, vB, R2].flat();
+  const rg = new THREE.BufferGeometry(); rg.setAttribute('position', new THREE.Float32BufferAttribute(tri, 3)); rg.computeVertexNormals();
+  put(rg, stdMat({ color: 0xb4532f, roughness: .8, side: THREE.DoubleSide, flatShading: true }), 0, HT + .25, 0);
+  put(new THREE.BoxGeometry(rw, .3, rd), stdMat({ color: 0x8a3a22, roughness: .8 }), 0, HT + .12, 0);
+  put(new THREE.BoxGeometry(rw + .1, .14, .14), stdMat({ color: 0xf2f2f0, roughness: .5 }), 0, HT + .2, rd / 2 + .05);
+  // pneus empilhados e fardos de refrigerante na calçada
+  const pneuG = new THREE.TorusGeometry(.38, .17, 8, 16), pneuM = stdMat({ color: 0x1a1a1a, roughness: .9 });
+  for (let k = 0; k < 5; k++) { const t = put(pneuG, pneuM, -.03 * W, .17 + k * .33, fz + .7); t.rotation.x = Math.PI / 2; }
+  const cores = [0x2f8a3e, 0xd8312a, 0xf08a1c];
+  for (let k = 0; k < 3; k++) for (let j = 0; j < 3 - (k > 1 ? 1 : 0); j++) put(new THREE.BoxGeometry(.75, .4, .5), stdMat({ color: cores[(k + j) % 3], roughness: .5 }), -.36 * W + j * .78, .2 + k * .41, fz + .65);
 }
 // praças, lago, cemitério, mercado
 function shapeGeo(p) { const s = new THREE.Shape(p.map(([x, z]) => new THREE.Vector2(x, -z))); return s; }
@@ -1314,6 +1410,10 @@ for (const r of ROADS) if (r.n) for (let k = 0; k < r.p.length - 1; k++) NAMED.p
 if (CASA225) {   // na frente da casa o HUD mostra o nome
   const { x, z, ry, W, D } = CASA225, f = [Math.sin(ry), Math.cos(ry)], u = [Math.cos(ry), -Math.sin(ry)], Q = (a, b) => [x + u[0] * a + f[0] * b, z + u[1] * a + f[1] * b];
   NAMED.push([null, [Q(-W / 2 - 3, D / 2 - .5), Q(W / 2 + 3, D / 2 - .5), Q(W / 2 + 3, D / 2 + 13), Q(-W / 2 - 3, D / 2 + 13)], 'Casa do Vô Bejo 🏠']);
+}
+if (LISBOA) {   // na frente do Comercial Lisboa o HUD mostra o nome
+  const { x, z, ry, W, D } = LISBOA, f = [Math.sin(ry), Math.cos(ry)], u = [Math.cos(ry), -Math.sin(ry)], Q = (a, b) => [x + u[0] * a + f[0] * b, z + u[1] * a + f[1] * b];
+  NAMED.push([null, [Q(-W / 2 - 2, D / 2 - .5), Q(W / 2 + 2, D / 2 - .5), Q(W / 2 + 2, D / 2 + 9), Q(-W / 2 - 2, D / 2 + 9)], 'Comercial Lisboa 🛒']);
 }
 for (const [t, n, p] of OSM.poly) if (n) NAMED.push([null, p, n]);
 function streetName(x, z) {
