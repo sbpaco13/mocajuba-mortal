@@ -72,6 +72,9 @@ kbd{background:rgba(255,255,255,.14);border-radius:4px;padding:1px 6px;font-fami
 #toast{position:absolute;top:22%;left:50%;transform:translateX(-50%);font-family:Rajdhani;font-weight:700;font-size:30px;text-shadow:0 3px 12px #000;text-align:center;transition:opacity .3s}
 #big{position:absolute;top:38%;left:50%;transform:translate(-50%,-50%);font-family:Rajdhani;font-weight:700;font-size:clamp(50px,10vw,120px);text-shadow:0 6px 30px rgba(0,0,0,.8);text-align:center;line-height:.9}
 #big small{display:block;font-size:24px;opacity:.9;margin-top:10px}
+#smog{position:absolute;inset:0;pointer-events:none;opacity:0;transition:opacity .6s;background:radial-gradient(ellipse at center,rgba(120,105,95,.55) 0%,rgba(95,80,70,.8) 60%,rgba(150,70,25,.9) 100%)}
+#zoneL{margin-top:4px}
+#zoneL b{color:#ff7a2f}
 #vig{position:absolute;inset:0;background:radial-gradient(ellipse at center,transparent 45%,rgba(200,0,0,.6) 100%);opacity:0}
 #spec{position:absolute;bottom:92px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.65);border-radius:12px;padding:8px 10px;display:flex;align-items:center;gap:12px;pointer-events:auto;font-size:14px}
 #spec button{background:rgba(255,255,255,.14);color:#fff;border:0;border-radius:8px;width:38px;height:34px;font-size:18px;cursor:pointer}
@@ -140,7 +143,8 @@ kbd{background:rgba(255,255,255,.14);border-radius:4px;padding:1px 6px;font-fami
 <canvas id="gl"></canvas>
 
 <div id="hud" class="hidden">
-  <div id="topl">Restam <span id="alive">0</span><div>Eliminações: <span id="kills">0</span></div><div id="eggL" style="letter-spacing:.12em;font-size:18px;margin-top:4px"></div></div>
+  <div id="smog"></div>
+  <div id="topl">Restam <span id="alive">0</span><div>Eliminações: <span id="kills">0</span></div><div id="eggL" style="letter-spacing:.12em;font-size:18px;margin-top:4px"></div><div id="zoneL"></div></div>
   <canvas id="mini" width="380" height="380"></canvas>
   <button id="snd" title="Som (tecla M)">🔊</button>
   <div id="feed"></div>
@@ -2099,7 +2103,7 @@ function randPickPos(p, test) {
 function movePickup(p, x, z) { p.x = x; p.z = z; p.g.position.set(x, 0, z); p.placed = true; p.n = streetName(x, z) || 'Ruas de Mocajuba'; }
 function respawnPickup(p) {
   const it = p.fixed || pick(ITEM_POOL);
-  if (!p.fixed) { const [x, z] = randPickPos(p, (x, z, k) => k > 150 || cars.every(c => !c.alive || Math.hypot(c.x - x, c.z - z) > 30)); movePickup(p, x, z); }
+  if (!p.fixed) { const [x, z] = randPickPos(p, (x, z, k) => (k > 190 || zoneOk(x, z)) && (k > 150 || cars.every(c => !c.alive || Math.hypot(c.x - x, c.z - z) > 30))); movePickup(p, x, z); }
   setPickup(p, it);
 }
 function setPickup(p, item, x, z) {
@@ -2271,14 +2275,14 @@ function fixLook(car, gain, kit) {   // kit = chave de boca: conserto completo (
 function heal(car, amt, kit) { const h0 = car.hp; car.hp = Math.min(car.maxHp, car.hp + amt); drawTag(car); fixLook(car, car.hp - h0, kit); }
 function dmgLook(car) { car.m.paint.color.copy(car.m.baseColor).lerp(new THREE.Color(0x2a2620), (1 - car.hp / car.maxHp) * .55); }
 
-const CAUSE = { batida: '💥', metralhadora: '🔫', foguete: '🚀', mina: '💣', rio: '🌊', lago: '🌊', parede: '🧱' };
+const CAUSE = { zona: '🔥', batida: '💥', metralhadora: '🔫', foguete: '🚀', mina: '💣', rio: '🌊', lago: '🌊', parede: '🧱' };
 function feed(html) { const d = document.createElement('div'); d.innerHTML = html; $('feed').prepend(d); setTimeout(() => d.remove(), 6000); while ($('feed').children.length > 6) $('feed').lastChild.remove(); }
 const nm = c => `<b class="${c.isPlayer ? 'me' : ''}">${c.name}</b>`;
 
 function damage(car, amt, src, cause) {
   if (!car.alive || state !== 'play') return;
   if (car.remote) return;   // online: quem desconta a vida é o celular dono do carro
-  if (car.fx.escudo > 0) { car.m.shield.material.opacity = .6; return; }
+  if (car.fx.escudo > 0 && cause !== 'zona') { car.m.shield.material.opacity = .6; return; }
   car.hp -= amt; car.clean = false; if (src && src !== car) { car.lastHitBy = src; car.lastHitTime = now; }
   if (car.hp < car.maxHp * .35) crackGlass(car);
   drawTag(car); dmgLook(car);
@@ -2303,10 +2307,10 @@ function kill(car, killer, cause, fromNet) {
     car.m.paint.color.setHex(0x1b1815); car.m.paint.roughness = .95; car.m.paint.clearcoat = 0; car.m.paint.metalness = .2;
     wreck(car);
   }
-  feed(killer && killer !== car ? `${nm(killer)} ${CAUSE[cause] || '💥'} ${nm(car)}` : `${nm(car)} ${cause === 'rio' ? 'caiu no Tocantins 🌊' : cause === 'lago' ? 'caiu no lago 🌊' : cause === 'saiu' ? 'saiu da partida 📴' : 'se destruiu sozinho 🧱'}`);
+  feed(killer && killer !== car ? `${nm(killer)} ${CAUSE[cause] || '💥'} ${nm(car)}` : `${nm(car)} ${cause === 'zona' ? 'sumiu na fumaça 🔥' : cause === 'rio' ? 'caiu no Tocantins 🌊' : cause === 'lago' ? 'caiu no lago 🌊' : cause === 'saiu' ? 'saiu da partida 📴' : 'se destruiu sozinho 🧱'}`);
   if (car.isPlayer) {
     specTarget = player;
-    big(`ELIMINADO<small>${killer && killer !== car ? 'por ' + killer.name : cause === 'rio' ? 'caiu no Tocantins' : cause === 'lago' ? 'caiu no lago' : 'bateu demais'}</small>`, 3);
+    big(`ELIMINADO<small>${killer && killer !== car ? 'por ' + killer.name : cause === 'zona' ? 'ficou na fumaça' : cause === 'rio' ? 'caiu no Tocantins' : cause === 'lago' ? 'caiu no lago' : 'bateu demais'}</small>`, 3);
   }
 }
 
@@ -2504,6 +2508,77 @@ function updPickups(dt) {
   }
 }
 
+/* ============================ ZONA: fumaça de queimada que fecha ============================ */
+const ZONE_ST = [[40, 35, 330], [30, 30, 190], [25, 25, 105], [20, 20, 50], [15, 20, 0]];   // [espera, fechamento, raio final] de cada etapa (s, s, m)
+const ZONE_DPS = [2, 4, 7, 12, 20];   // vida por segundo fora da zona, por etapa
+const ZONE = { on: false, r: 1e9, next: 1e9, x: 0, z: 0, st: 0, phase: 'hold', left: 0 };
+const zoneMesh = (() => {
+  const t = canvasTex(1024, 256, (c, w, h) => {
+    c.clearRect(0, 0, w, h);
+    for (let i = 0; i < 520; i++) {
+      const x = Math.random() * w, y = h * (.15 + Math.random() * .85), r = 14 + Math.random() * 46, v = 70 + Math.random() * 70;
+      for (const dx of [-w, 0, w]) { const gr = c.createRadialGradient(x + dx, y, 0, x + dx, y, r); gr.addColorStop(0, `rgba(${v + 25},${v + 10},${v},.5)`); gr.addColorStop(1, 'rgba(0,0,0,0)'); c.fillStyle = gr; c.fillRect(x + dx - r, y - r, r * 2, r * 2); }
+    }
+    c.globalCompositeOperation = 'source-atop';
+    const gb = c.createLinearGradient(0, h, 0, h * .55); gb.addColorStop(0, 'rgba(255,110,20,.85)'); gb.addColorStop(.35, 'rgba(230,90,30,.35)'); gb.addColorStop(1, 'rgba(0,0,0,0)'); c.fillStyle = gb; c.fillRect(0, 0, w, h);
+    c.globalCompositeOperation = 'destination-in';
+    const ga = c.createLinearGradient(0, 0, 0, h); ga.addColorStop(0, 'rgba(0,0,0,0)'); ga.addColorStop(.45, 'rgba(0,0,0,.75)'); ga.addColorStop(1, 'rgba(0,0,0,1)'); c.fillStyle = ga; c.fillRect(0, 0, w, h);
+    c.globalCompositeOperation = 'source-over';
+    for (let i = 0; i < 90; i++) { c.fillStyle = `rgba(255,${150 + Math.random() * 80 | 0},60,${.5 + Math.random() * .5})`; c.fillRect(Math.random() * w, h * (.7 + Math.random() * .3), 2, 2); }
+  });
+  const m = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 38, 192, 1, true), new THREE.MeshBasicMaterial({ map: t, transparent: true, depthWrite: false, side: THREE.DoubleSide, fog: false }));
+  m.position.y = 18; m.visible = false; m.renderOrder = 5; m.userData.tex = t; scene.add(m); return m;
+})();
+function pickZoneCenter() {   // centro sorteado numa rua perto do miolo da cidade
+  const xs = PICK_NODES.map(i => gN[i].x), zs = PICK_NODES.map(i => gN[i].z);
+  const mx = (Math.min(...xs) + Math.max(...xs)) / 2, mz = (Math.min(...zs) + Math.max(...zs)) / 2;
+  const c = PICK_NODES.filter(i => Math.hypot(gN[i].x - mx, gN[i].z - mz) < 200);
+  const nd = gN[pick(c.length ? c : PICK_NODES)]; return [+nd.x.toFixed(1), +nd.z.toFixed(1)];
+}
+function startZone(c, n) {
+  const k = n <= 3 ? .7 : n <= 5 ? .85 : 1;   // com poucos carros a fumaça fecha mais rápido
+  const R0 = Math.max(...[[G.x0, G.z0], [G.x0 + G.w, G.z0], [G.x0, G.z0 + G.h], [G.x0 + G.w, G.z0 + G.h]].map(([x, z]) => Math.hypot(x - c[0], z - c[1]))) + 20;
+  Object.assign(ZONE, { on: true, x: c[0], z: c[1], t: 0, k, R0, r: R0, next: ZONE_ST[0][2], st: 0, phase: 'hold', left: ZONE_ST[0][0] * k, dmgT: 0, ph0: '', st0: -1 });
+  zoneMesh.position.set(c[0], 18, c[1]); zoneMesh.visible = true;
+}
+function stopZone() { ZONE.on = false; ZONE.r = ZONE.next = 1e9; zoneMesh.visible = false; $('smog').style.opacity = 0; $('zoneL').innerHTML = ''; }
+const zoneOk = (x, z, m = 8) => !ZONE.on || Math.hypot(x - ZONE.x, z - ZONE.z) < Math.max(15, Math.min(ZONE.r, ZONE.next) - m);
+function updZone(dt) {
+  if (!ZONE.on) return;
+  if (state === 'play') ZONE.t += dt;
+  let t = ZONE.t, pr = ZONE.R0, done = true;
+  for (let i = 0; i < ZONE_ST.length; i++) {
+    const [w0, s0, R] = ZONE_ST[i], w = w0 * ZONE.k, sd = s0 * ZONE.k;
+    if (t < w) { Object.assign(ZONE, { r: pr, st: i, phase: 'hold', left: w - t, next: R }); done = false; break; }
+    t -= w;
+    if (t < sd) { const u = t / sd; Object.assign(ZONE, { r: pr + (R - pr) * (u * u * (3 - 2 * u)), st: i, phase: 'shrink', left: sd - t, next: R }); done = false; break; }
+    t -= sd; pr = R;
+  }
+  if (done) Object.assign(ZONE, { r: 0, st: ZONE_ST.length - 1, phase: 'end', left: 0, next: 0 });
+  if (ZONE.phase !== ZONE.ph0 || ZONE.st !== ZONE.st0) {
+    if (state === 'play') {
+      if (ZONE.phase === 'shrink') { big(`🔥 A FUMAÇA ESTÁ FECHANDO<small>${ZONE.next ? 'corra para dentro do círculo' : 'última fumaça: não sobra lugar seguro!'}</small>`, 2.2); sfx.count(false); }
+      else if (ZONE.phase === 'hold' && ZONE.st === 0) toast('🔥 Queimada chegando!<br><small style="font-size:16px;opacity:.8">fique dentro do círculo do minimapa</small>');
+    }
+    ZONE.ph0 = ZONE.phase; ZONE.st0 = ZONE.st;
+  }
+  const r = Math.max(ZONE.r, .5); zoneMesh.scale.set(r, 1, r);
+  const tex = zoneMesh.userData.tex; tex.repeat.x = Math.max(1, Math.round(2 * Math.PI * r / 70)); tex.offset.x += dt * .004; tex.offset.y = Math.sin(now * .7) * .015;
+  ZONE.dmgT -= dt;
+  if (ZONE.dmgT <= 0 && state === 'play') {
+    ZONE.dmgT = .5;
+    for (const c of cars) if (c.alive && Math.hypot(c.x - ZONE.x, c.z - ZONE.z) > ZONE.r) { damage(c, ZONE_DPS[ZONE.st] * .5, null, 'zona'); if (Math.random() < .6) emit('norm', c.x, 1.5, c.z, { vx: rand(-1, 1), vy: rand(1.5, 3), vz: rand(-1, 1), life: rand(1, 1.8), s0: 1, s1: 3, g: -.5, op: .45, color: 0x6e645c }); }
+  }
+  const tg = camTarget();
+  if (tg) {
+    const d = Math.hypot(tg.x - ZONE.x, tg.z - ZONE.z), out = d > ZONE.r;
+    $('smog').style.opacity = out ? .7 : d > ZONE.r - 12 ? .2 : 0;
+    const mm = Math.floor(ZONE.left / 60), ss = String(Math.ceil(ZONE.left) % 60).padStart(2, '0');
+    const tm = ZONE.left >= 59.5 ? `${mm + (Math.ceil(ZONE.left) % 60 === 0 ? 1 : 0)}:${ss}` : `0:${ss}`;
+    $('zoneL').innerHTML = (ZONE.phase === 'hold' ? `🔥 Fumaça fecha em ${tm}` : ZONE.phase === 'shrink' ? `🔥 Fumaça avançando ${tm}` : '🔥 Fumaça total') + (out && tg.alive ? '<br><b>FORA DA ZONA!</b>' : '');
+  }
+}
+
 /* ============================ IA ============================ */
 function aiInput(c, dt) {
   const ai = c.ai, inp = { throttle: 1, steer: 0, brake: false, fire: false };
@@ -2519,6 +2594,7 @@ function aiInput(c, dt) {
   let best = null, bs = 1e9;
   for (const p of pickups) {
     if (!p.active || (ai.skip && ai.skip.get(p) > now)) continue; if (p.item === 'reparo' && c.hp > c.maxHp * .8) continue;
+    if (!zoneOk(p.x, p.z, 4)) continue;
     let s = Math.hypot(p.x - c.x, p.z - c.z); if (p.item === 'reparo' && wantRep) s *= .4; else if (!wantW) s *= 2.5;
     if (p.n === 'Mirante do Boto') s *= 1.8;
     if (s < bs) { bs = s; best = p; }
@@ -2528,6 +2604,13 @@ function aiInput(c, dt) {
     if (Math.hypot(gx - c.x, gz - c.z) < 14) ai.nearT = (ai.goalP === best ? ai.nearT || 0 : 0) + dt; else ai.nearT = 0;
     ai.goalP = best;
     if (ai.nearT > 3) { (ai.skip = ai.skip || new Map()).set(best, now + 20); ai.nearT = 0; ai.path = null; }   // rodando em volta sem pegar: desiste por um tempo
+  }
+  if (ZONE.on) {   // fumaça: alvo fora da zona não vale a pena, carro fora dela corre para o centro
+    const zr = ZONE.phase === 'hold' && ZONE.left < 12 ? Math.min(ZONE.r, ZONE.next) : ZONE.r, lim = Math.max(zr - 12, zr * .6);
+    if (Math.hypot(gx - ZONE.x, gz - ZONE.z) > lim || Math.hypot(c.x - ZONE.x, c.z - ZONE.z) > zr - 4) {
+      const a = Math.atan2(c.x - ZONE.x, c.z - ZONE.z), rr = Math.min(lim * .5, 25);
+      if (Math.hypot(gx - c.x, gz - c.z) > 1) { gx = ZONE.x + Math.sin(a) * rr; gz = ZONE.z + Math.cos(a) * rr; }
+    }
   }
   ai.navT -= dt;
   if (ai.navT <= 0) {
@@ -3032,6 +3115,14 @@ function drawMini() {
   mg.fillStyle = '#3e5c6c'; mg.fillRect(0, 0, MS, MS);
   mg.drawImage(mapC, ox - G.x0, oz - G.z0, MS, MS, 0, 0, MS, MS);
   const P = (x, z) => [clamp(x - ox, 8, MS - 8), clamp(z - oz, 8, MS - 8)];
+  if (ZONE.on) {   // fumaça: escurece fora do círculo, linha laranja na borda atual e tracejado branco na próxima
+    const zx = ZONE.x - ox, zz = ZONE.z - oz, zr = Math.max(ZONE.r, 0);
+    mg.save(); mg.beginPath(); mg.rect(0, 0, MS, MS); mg.arc(zx, zz, zr, 0, 7, true); mg.fillStyle = 'rgba(70,45,30,.55)'; mg.fill('evenodd');
+    mg.lineWidth = 4; mg.strokeStyle = '#ff7a2f'; mg.beginPath(); mg.arc(zx, zz, zr, 0, 7); mg.stroke();
+    if (ZONE.next < ZONE.r - 1 && ZONE.next > 0) { mg.setLineDash([10, 8]); mg.lineWidth = 2.5; mg.strokeStyle = '#fff'; mg.beginPath(); mg.arc(zx, zz, ZONE.next, 0, 7); mg.stroke(); mg.setLineDash([]); }
+    if (Math.hypot(t.x - ZONE.x, t.z - ZONE.z) > zr - 10) { const a = Math.atan2(zz - MS / 2, zx - MS / 2); mg.strokeStyle = '#ff7a2f'; mg.lineWidth = 3; mg.setLineDash([6, 6]); mg.beginPath(); mg.moveTo(MS / 2, MS / 2); mg.lineTo(MS / 2 + Math.cos(a) * 170, MS / 2 + Math.sin(a) * 170); mg.stroke(); mg.setLineDash([]); }
+    mg.restore();
+  }
   for (const a of ACAI.list) if (a.up) { const [x, z] = P(a.x, a.z); mg.fillStyle = '#d4232a'; mg.beginPath(); mg.arc(x, z, 6, 0, 7); mg.fill(); mg.strokeStyle = '#fff'; mg.lineWidth = 2; mg.stroke(); }
   for (const p of pickups) if (p.active) { const [x, z] = P(p.x, p.z); mg.fillStyle = ITEMS[p.item].color; mg.fillRect(x - 6, z - 6, 12, 12); mg.strokeStyle = '#000'; mg.lineWidth = 2; mg.strokeRect(x - 6, z - 6, 12, 12); }
   if (CASA225) {   // casa do Vô Bejo: fica presa na borda do minimapa apontando a direção quando está longe
@@ -3123,6 +3214,7 @@ window.__engineDemo = async (ev, sp0) => {
 window.__sfx = () => ({ state: SFX.ctx && SFX.ctx.state, engines: SFX.eng.size, on: SFX.on });
 window.__mapDbg = { sdf, cls, G, B, inBounds, gN };
 window.__carDbg = { botoify, buildCarMesh, CARS, THREE, RoomEnvironment, impactAt, wreck, debris, updDebris, pl: () => player };
+window.__zone = { ZONE, startZone, stopZone, pickZoneCenter };
 window.__tp = (x, z, h) => { if (player) { player.x = x; player.z = z; player.h = h; player.vx = player.vz = 0; } };
 window.__sim = n => { for (let i = 0; i < n; i++) tick(1 / 60, false); };
 function tick(dt, draw) {
@@ -3137,6 +3229,7 @@ function tick(dt, draw) {
     for (const c of cars) updCar(c, dt);
     if (state === 'play') { carCollisions(); updProjectiles(dt); }
     updPickups(dt);
+    updZone(dt);
     updEggs(dt);
     if (state === 'play' && aliveCars().length <= 1) { state = 'ending'; endT = 2.5; const w = aliveCars()[0]; if (w) { big(w.isPlayer ? 'VITÓRIA!' : `${w.name}<small>venceu a partida</small>`, 3); specTarget = w; } }
     if (state === 'ending') { endT -= dt; if (endT <= 0) showEnd(); }
@@ -3219,7 +3312,7 @@ function netStartClick() {
   const total = Math.max(NET.players.length, +$('onl-total').value);
   const spawns = computeSpawns(total); if (!spawns) return netMsg('Não achei lugares para todos os carros nesta cidade.');
   const names = [...BOT_NAMES].sort(() => Math.random() - .5);
-  const plan = { seed: SEED, cars: [], items: startItems(spawns.slice(0, total)) };
+  const plan = { seed: SEED, cars: [], items: startItems(spawns.slice(0, total)), zone: pickZoneCenter() };
   NET.players.forEach((p, i) => plan.cars.push({ id: p.id, owner: p.id, human: 1, key: CARS[p.car] ? p.car : 'eletrico', name: p.name, x: spawns[i][0], z: spawns[i][1], h: spawns[i][2] }));
   for (let i = NET.players.length; i < total; i++) plan.cars.push({ id: 'b' + i, owner: NET.me, key: pick(CAR_KEYS), name: names[i % names.length], x: spawns[i][0], z: spawns[i][1], h: spawns[i][2] });
   netSend({ t: 'start', plan });
@@ -3234,6 +3327,7 @@ function startOnline(plan) {
   }
   for (const p of pickups) p.placed = false;
   plan.items.forEach((it, i) => { if (pickups[i]) setPickup(pickups[i], ...it); });
+  startZone(plan.zone || pickZoneCenter(), plan.cars.length);
   setupEggs();
   const f = player || cars[0];
   camera.position.set(f.x - Math.sin(f.h) * 9, 4, f.z - Math.cos(f.h) * 9); camLook.set(f.x, 1, f.z);
@@ -3414,7 +3508,7 @@ function clearMatch() {
   for (const m of mines) scene.remove(m.g);
   for (const d of debris) scene.remove(d.o); debris.length = 0;
   if (SFX.ctx) for (const c of [...SFX.eng.keys()]) stopEngine(c);
-  cars = []; projectiles = []; mines = []; elim = []; player = null; specTarget = null;
+  cars = []; projectiles = []; mines = []; elim = []; player = null; specTarget = null; stopZone();
   for (const k in pools) for (const p of pools[k]) { p.on = false; p.m.visible = false; }
   $('feed').innerHTML = '';
 }
@@ -3450,6 +3544,7 @@ function startMatch() {
   for (let i = 0; i < nb; i++) { const s = spawns[i + 1]; createCar(pick(CAR_KEYS), names[i], false, s[0], s[1], s[2]); }
   const its = startItems(spawns); pickups.forEach((p, i) => setPickup(p, ...its[i]));
   setupEggs();
+  startZone(pickZoneCenter(), nb + 1);
   camera.position.set(player.x - Math.sin(player.h) * 9, 4, player.z - Math.cos(player.h) * 9);
   camLook.set(player.x, 1, player.z);
   $('menu').classList.add('hidden'); $('end').classList.add('hidden'); $('hud').classList.remove('hidden');
