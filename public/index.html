@@ -2303,7 +2303,7 @@ function updProjectiles(dt) {
     if (dead) { scene.remove(p.m); projectiles.splice(i, 1); }
   }
   for (let i = mines.length - 1; i >= 0; i--) {
-    const mn = mines[i]; mn.l.visible = (now * 4 | 0) % 2 === 0; { const bk = now * 1.5 | 0; if (bk !== mn.bk) { mn.bk = bk; sfx.beep(mn.x, mn.z); } } let boom = now - mn.born > 45 && (!NET.on || !mn.owner.remote);
+    const mn = mines[i]; mn.l.visible = (now * 4 | 0) % 2 === 0; { const bk = now * 1.5 | 0; if (bk !== mn.bk) { mn.bk = bk; sfx.beep(mn.x, mn.z); } } let boom = false;   // minas não explodem sozinhas: ficam até alguém passar por cima
     if (now - mn.born > .6) for (const c of cars) { if (!c.alive || c.remote) continue; if (c === mn.owner && now - mn.born < 2.5) continue; if (Math.hypot(c.x - mn.x, c.z - mn.z) < 2.8) { boom = true; break; } }
     if (boom) { scene.remove(mn.g); mines.splice(i, 1); explode(mn.x, mn.z, 6.5, 48, mn.owner, 'mina'); if (NET.on) netSend({ t: 'mineX', mid: mn.mid }); }
   }
@@ -2318,7 +2318,7 @@ function updPickups(dt) {
       const it = p.item;
       if (NET.on) netSend({ t: 'pick', i: pickups.indexOf(p), id: c.id, item: it });
       if (it === 'reparo') heal(c, 45, true);
-      else if (it === 'espinhos' || it === 'nitro' || it === 'escudo') c.fx[it] = { espinhos: 9, nitro: 5, escudo: 6 }[it];
+      else if (it === 'espinhos' || it === 'nitro' || it === 'escudo') c.fx[it] = { espinhos: 9, nitro: 5, escudo: 12 }[it];
       else c.weapon = it === 'metralhadora' ? { type: it, t: 20, max: 20 } : it === 'foguete' ? { type: it, ammo: 2, t: 20, max: 20 } : { type: it, ammo: 3, t: 20, max: 20 };
       if (c === camTarget()) sfx.pickup();
       if (c === camTarget()) toast(`<span style="color:${ITEMS[it].color}">${ITEMS[it].icon} ${ITEMS[it].label}</span><br><small style="font-size:16px;opacity:.8">${p.n}</small>`);
@@ -2902,7 +2902,7 @@ function updHud(dt) {
   let h = '';
   if (t.weapon) { const it = ITEMS[t.weapon.type]; h += `<div class="slot" style="border-color:${it.color}"><div class="ic">${it.icon}</div><div class="nm">${it.label}${t.weapon.ammo ? ' ×' + t.weapon.ammo : ''}</div><div class="tb"><s style="width:${t.weapon.t / t.weapon.max * 100}%;background:${it.color}"></s></div></div>`; }
   else h += `<div class="slot" style="opacity:.55"><div class="ic">·</div><div class="nm">Sem arma</div></div>`;
-  for (const k of ['espinhos', 'nitro', 'escudo']) if (t.fx[k] > 0) { const it = ITEMS[k], mx_ = { espinhos: 9, nitro: 5, escudo: 6 }[k]; h += `<div class="slot" style="border-color:${it.color};min-width:90px"><div class="ic">${it.icon}</div><div class="nm">${it.label.split(' ')[0]}</div><div class="tb"><s style="width:${t.fx[k] / mx_ * 100}%;background:${it.color}"></s></div></div>`; }
+  for (const k of ['espinhos', 'nitro', 'escudo']) if (t.fx[k] > 0) { const it = ITEMS[k], mx_ = { espinhos: 9, nitro: 5, escudo: 12 }[k]; h += `<div class="slot" style="border-color:${it.color};min-width:90px"><div class="ic">${it.icon}</div><div class="nm">${it.label.split(' ')[0]}</div><div class="tb"><s style="width:${t.fx[k] / mx_ * 100}%;background:${it.color}"></s></div></div>`; }
   $('wpn').innerHTML = h;
   const spec = !player.alive && aliveCars().length > 0 && state === 'play';
   $('spec').classList.toggle('hidden', !spec);
