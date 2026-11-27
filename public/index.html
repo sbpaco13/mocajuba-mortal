@@ -10,14 +10,17 @@
 html,body{width:100%;height:100%;overflow:hidden;background:#0b0a09;font-family:Inter,system-ui,sans-serif;color:#fff;user-select:none;-webkit-user-select:none;touch-action:none;-webkit-touch-callout:none;-webkit-text-size-adjust:100%;overscroll-behavior:none}
 canvas#gl{display:block;position:fixed;inset:0}
 .hidden{display:none!important}
-.scr{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;overflow:auto}
+.scr{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding:24px;overflow:auto}
+.scr>:first-child{margin-top:auto}
+.scr>:last-child{margin-bottom:auto}
 #menu{background:linear-gradient(180deg,rgba(12,8,5,.25) 0%,rgba(12,8,5,.88) 70%)}
 h1{font-family:Rajdhani;font-weight:700;font-size:clamp(44px,8vw,96px);letter-spacing:.03em;line-height:.85;text-align:center;text-shadow:0 6px 40px rgba(255,110,30,.55)}
 h1 span{color:#ff7a2f}
 .sub{opacity:.85;margin:10px 0 22px;font-size:15px;text-align:center}
-#cars{display:grid;grid-template-columns:repeat(6,minmax(140px,180px));gap:10px}
-@media (max-width:1060px){#cars{grid-template-columns:repeat(3,minmax(140px,1fr))}}
-@media (max-width:640px){#cars{grid-template-columns:repeat(2,minmax(140px,1fr))}}
+#cars{display:flex;flex-wrap:wrap;justify-content:center;gap:10px;max-width:960px}
+#cars .card{width:180px;box-sizing:border-box}
+@media (max-width:1060px){#cars{max-width:600px}}
+@media (max-width:640px){#cars .card{width:calc(50% - 5px)}}
 .card{background:rgba(22,20,19,.82);border:2px solid rgba(255,255,255,.1);border-radius:14px;padding:10px 12px 12px;cursor:pointer;transition:border-color .15s,transform .15s}
 .card:hover{border-color:rgba(255,255,255,.3);transform:translateY(-2px)}
 .card.sel{border-color:#ff7a2f;background:rgba(58,30,14,.85)}
@@ -136,7 +139,7 @@ kbd{background:rgba(255,255,255,.14);border-radius:4px;padding:1px 6px;font-fami
   .card .st,.card small{display:none}
   .card b{font-size:15px}
 }
-@media (pointer:coarse) and (orientation:landscape){#cars{grid-template-columns:repeat(6,minmax(0,130px))}}
+@media (pointer:coarse) and (orientation:landscape){#cars{max-width:720px}#cars .card{width:130px}}
 </style>
 </head>
 <body>
@@ -1483,6 +1486,28 @@ const CARS = {
   compacto: {
     name: 'Brunyaris', color: 0xf4f4f1, metal: .2, hp: 100, accel: 22, top: 38.5, mass: 1.05, turn: 2.5, grip: 1.0, desc: 'O mais rápido em linha reta',
     L: 3.8, W: 1.8, wb: 2.45, fo: .62, wr: .38, clear: .16, fbY: .22, rbY: .26, noseY: .72, hoodY: .98, wsU: .95, roofFU: 0, roofY: 1.52, roofRU: -1.33, roofRY: 1.49, rgU: -1.78, beltR: 1.06, tailY: 1.02, th: .22, bU: -.35, cU: -1.08, style: 'compacto'
+  },
+  lana: {
+    name: 'Lanora', color: 0x2a6fd8, metal: .35, hp: 80, accel: 25.5, top: 41, mass: 1.0, turn: 2.45, grip: 1.0, desc: 'O mais rápido do jogo, mas aguenta pouca pancada',
+    L: 4.0, W: 1.84, wb: 2.62, fo: .72, wr: .4, clear: .2, fbY: .3, rbY: .34, noseY: .82, hoodY: 1.04, wsU: .95, roofFU: .05, roofY: 1.52, roofRU: -1.3, roofRY: 1.48, rgU: -1.85, beltR: 1.08, tailY: 1.06, th: .12, bU: -.3, cU: -1.1, style: 'lana',
+    loft: {
+      yFront: .3, yDoor: .42, yRear: .34, arch: .52,
+      //        z      p2 (lateral)   p3 (cintura)   p4 (topo do vidro)  p5 (borda do teto)  p6 (centro do teto)
+      keys: [[2.0, [[.7, .5], [.66, .74], [.5, .8], [.28, .82], [0, .83]]],
+             [1.85, [[.84, .5], [.82, .86], [.68, .92], [.38, .95], [0, .96]]],
+             [1.3, [[.91, .52], [.9, .97], [.76, 1.0], [.45, 1.02], [0, 1.03]]],
+             [.95, [[.92, .54], [.91, 1.02], [.78, 1.05], [.5, 1.06], [0, 1.07]]],
+             [.05, [[.92, .54], [.91, 1.05], [.74, 1.46], [.62, 1.51], [0, 1.53]]],
+             [-.27, [[.92, .54], [.91, 1.057], [.738, 1.451], [.615, 1.501], [0, 1.521]]],
+             [-.41, [[.92, .54], [.91, 1.06], [.737, 1.446], [.613, 1.496], [0, 1.516]]],
+             [-1.3, [[.92, .54], [.91, 1.08], [.73, 1.42], [.6, 1.47], [0, 1.49]]],
+             [-1.75, [[.88, .54], [.86, 1.08], [.68, 1.29], [.55, 1.33], [0, 1.34]]],
+             [-2.0, [[.8, .54], [.78, 1.04], [.62, 1.12], [.46, 1.14], [0, 1.15]]]],
+      mat: (band, z) => band === 0 ? 'black' : band === 1 ? (z < .7 && z > -.95 ? 'black' : 'paint') : band === 2 ? 'paint'
+        : band === 3 ? (z < -.27 && z > -.41 ? 'black' : z < .88 && z > -1.55 ? 'glass' : 'paint')
+        : band === 4 ? ((z < .93 && z > .1) || (z < -1.33 && z > -1.97) ? 'glass' : z <= .1 && z >= -1.33 ? 'black' : 'paint')
+        : (z < .93 && z > .1) || (z < -1.33 && z > -1.97) ? 'glass' : z <= .1 && z >= -1.33 ? 'black' : 'paint'
+    }
   }
 };
 const CAR_KEYS = Object.keys(CARS);
@@ -1800,6 +1825,42 @@ const wrapLamp = (sx, o) => {
     box(.6, .16, .05, gridM, 0, .88, fzz + .01);
     box(1.4, .26, .08, black, 0, .46, fzz);
     box(1.4, .24, .08, black, 0, .5, rzz);
+  } else if (c.style === 'lana') {         // crossover esportivo: faróis ovais nos ombros do capô, grade grande, teto preto flutuante e barra de luz atrás
+    const fzz = L2 + .005, rzz = -L2 - .005;
+    const dark = new THREE.MeshStandardMaterial({ color: 0x17191b, roughness: .55, metalness: .2 });
+    const flat = (pts, mat, z, dep = .03) => { const sh = new THREE.Shape(); sh.moveTo(pts[0][0], pts[0][1]); for (const q of pts.slice(1)) sh.lineTo(q[0], q[1]); sh.closePath(); const m = new THREE.Mesh(new THREE.ExtrudeGeometry(sh, { depth: dep, bevelEnabled: false }), mat); m.position.z = z; body.add(m); return m; };
+    root.updateMatrixWorld(true);
+    const hull = body.children.filter(o => o.userData.shell && !o.userData.glass), rc = new THREE.Raycaster();
+    const onSkin = (x, y, dz, dx = 0) => {   // ponto da lataria visto da frente (cache para não travar no conserto)
+      const ck = c.name + '|' + x + '|' + y + '|' + dz + '|' + dx;
+      if (!LAMP_CACHE.has(ck)) {
+        rc.set(new THREE.Vector3(x - dx * 4, y, -dz * 4), new THREE.Vector3(dx, 0, dz).normalize()); const h = rc.intersectObjects(hull, false)[0];
+        LAMP_CACHE.set(ck, h ? [body.worldToLocal(h.point.clone()), h.face.normal.clone().transformDirection(h.object.matrixWorld)] : null);
+      }
+      const v = LAMP_CACHE.get(ck); return v && [v[0].clone(), v[1].clone()];
+    };
+    const ovalG = new THREE.CylinderGeometry(1, 1, .04, 24).rotateX(Math.PI / 2);
+    for (const sx of [-1, 1]) {
+      const hit = onSkin(sx * .6, .88, -1);
+      if (hit) {   // farol oval deitado sobre a lataria, olhando para a frente e um pouco para fora
+        const [pt, nr] = hit, q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), nr);
+        const rim = new THREE.Mesh(ovalG, hlHouse); rim.scale.set(.18, .105, 1); rim.position.copy(pt).addScaledVector(nr, .01); rim.quaternion.copy(q); rim.rotateZ(sx * -.35); body.add(rim);
+        const lit = new THREE.Mesh(ovalG, new THREE.MeshStandardMaterial({ color: 0xe9e6e0, emissive: 0xfff6e6, emissiveIntensity: 1.1, roughness: .3 })); lit.scale.set(.145, .078, 1); lit.position.copy(pt).addScaledVector(nr, .03); lit.quaternion.copy(rim.quaternion); body.add(lit);
+      }
+      flat([[sx * .62, .62], [sx * .8, .64], [sx * .78, .36], [sx * .7, .36]], dark, fzz - .1, .12);          // entradas laterais em diagonal
+      box(.42, .035, .05, red, sx * .6, .66, rzz - .02);                                                    // refletores baixos
+      box(.09, .12, .2, paint, sx * .95, 1.14, .74, 0, sx * .12, 0); box(.1, .04, .05, black, sx * .87, 1.09, .78);   // retrovisor
+      for (const u of [.05, -.95]) box(.025, .035, .16, chrome, sx * .915, 1.0, u);                         // maçanetas
+      box(.04, .035, 1.15, chrome, sx * .6, 1.53, -.6);                                                     // rack prata fino
+    }
+    flat([[-.56, .6], [.56, .6], [.44, .34], [-.44, .34]], dark, fzz - .06, .1);                             // grade grande trapezoidal
+    box(1.3, .07, .1, black, 0, .25, fzz - .05);                                                             // lábio inferior
+    box(W * .66, .05, .36, gloss, 0, 1.5, -1.45, -.08, 0, 0);                                                            // aerofólio preto
+    box(.24, .025, .03, tl, 0, 1.5, -1.64);                                                                 // brake light
+    box(.92, .045, .06, tl, 0, 1.09, rzz - .01);                                                          // barra de luz atrás
+    for (const sx of [-1, 1]) box(.1, .06, .06, tl, sx * .47, 1.085, rzz - .02);
+    box(1.4, .2, .1, black, 0, .4, rzz);                                                                     // difusor
+    for (const k of [-.45, -.15, .15, .45]) box(.04, .18, .12, dark, k, .36, rzz - .03);
   } else {                                 // compacto: carroceria arredondada, frente nova (faróis puxados, faixa e "V" pretos)
     const LAMP_HATCH = { k: [[0, .3, L2, 0, -1], [.42, .72, L2, 0, -1], [.6, .82, L2 - .15, -.7, -.7], [.8, .9, L2 - .45, -1, 0], [1, .9, L2 - .9, -1, 0]],
       lo: u => u < .42 ? -.03 - u / .42 * .06 : u < .6 ? -.09 : -.09 + (u - .6) / .4 * .27,
@@ -1854,7 +1915,7 @@ const wrapLamp = (sx, o) => {
   const tireG = new THREE.LatheGeometry([[c.wr * .66, -.1], [c.wr * .88, -.106], [c.wr - .025, -.098], [c.wr, -.065], [c.wr + .004, 0], [c.wr, .065], [c.wr - .025, .098], [c.wr * .88, .106], [c.wr * .66, .1]].map(([a, b]) => new THREE.Vector2(a, b)), 32).rotateZ(Math.PI / 2);
   const tireM = new THREE.MeshStandardMaterial({ color: 0xffffff, map: CT.tread, roughness: .88 });
   const calM = new THREE.MeshStandardMaterial({ color: c.style === 'eletrico' ? 0x9a1f22 : 0x3a3c3f, roughness: .45, metalness: .4 });
-  const rimCol = c.style === 'eletrico' ? 0x3a3e42 : c.style === 'suv' ? 0x1b1d1f : c.style === 'jipe' ? 0x55595d : c.style === 'kwid' ? 0x8d9195 : 0xbfc3c7;
+  const rimCol = c.style === 'lana' ? 0x26292c : c.style === 'eletrico' ? 0x3a3e42 : c.style === 'suv' ? 0x1b1d1f : c.style === 'jipe' ? 0x55595d : c.style === 'kwid' ? 0x8d9195 : 0xbfc3c7;
   const rimM = new THREE.MeshStandardMaterial({ color: rimCol, metalness: .85, roughness: .25 });
   const faceM = new THREE.MeshStandardMaterial({ color: 0xd9dde0, metalness: 1, roughness: .18 });
   const discM = new THREE.MeshStandardMaterial({ color: 0x77797b, metalness: .8, roughness: .5 });
@@ -1862,7 +1923,7 @@ const wrapLamp = (sx, o) => {
   const rimParts = [new THREE.CylinderGeometry(rr, rr, .14, 28, 1, true).rotateZ(Math.PI / 2).toNonIndexed(), new THREE.CylinderGeometry(rr * .25, rr * .25, .05, 16).rotateZ(Math.PI / 2).translate(.06, 0, 0).toNonIndexed()];
   const nSp = c.style === 'suv' ? 10 : c.style === 'jipe' ? 6 : 5;
   const spokes = [];
-  for (let i = 0; i < nSp; i++) { const a = i / nSp * Math.PI * 2; const sp = new THREE.BoxGeometry(.03, rr * .8, c.style === 'eletrico' ? .13 : .055).translate(0, rr * .55, 0).rotateX(a).translate(.055, 0, 0); spokes.push(sp.toNonIndexed()); }
+  for (let i = 0; i < nSp; i++) { const a = i / nSp * Math.PI * 2; const sp = new THREE.BoxGeometry(.03, rr * .8, c.style === 'eletrico' || c.style === 'lana' ? .13 : .055).translate(0, rr * .55, 0).rotateX(a).translate(.055, 0, 0); spokes.push(sp.toNonIndexed()); }
   const rimG = mergeGeometries(rimParts), spokeG = mergeGeometries(spokes);
   const discG = new THREE.CylinderGeometry(rr * .82, rr * .82, .03, 24).rotateZ(Math.PI / 2);
   const wheels = [], fronts = [], wheelMeta = [];
@@ -1870,7 +1931,7 @@ const wrapLamp = (sx, o) => {
     const pv = new THREE.Group(); pv.position.set(sx * (W / 2 - .14), c.wr, u); root.add(pv);
     const wh = new THREE.Group(); pv.add(wh);
     wh.add(new THREE.Mesh(tireG, tireM));
-    const rim = new THREE.Group(); rim.add(new THREE.Mesh(rimG, rimM)); rim.add(new THREE.Mesh(spokeG, c.style === 'suv' ? faceM : rimM));
+    const rim = new THREE.Group(); rim.add(new THREE.Mesh(rimG, rimM)); rim.add(new THREE.Mesh(spokeG, c.style === 'suv' || c.style === 'lana' ? faceM : rimM));
     rim.scale.x = sx; wh.add(rim);
     const disc = new THREE.Mesh(discG, discM); disc.position.x = -sx * .03; pv.add(disc);
     const cal = new THREE.Mesh(new RoundedBoxGeometry(.05, .14, .09, 2, .02), calM); cal.position.set(-sx * .005, rr * .55, u === fa ? -rr * .45 : rr * .45); pv.add(cal);
@@ -3213,7 +3274,7 @@ window.__engineDemo = async (ev, sp0) => {
 };
 window.__sfx = () => ({ state: SFX.ctx && SFX.ctx.state, engines: SFX.eng.size, on: SFX.on });
 window.__mapDbg = { sdf, cls, G, B, inBounds, gN };
-window.__carDbg = { botoify, buildCarMesh, CARS, THREE, RoomEnvironment, impactAt, wreck, debris, updDebris, pl: () => player };
+window.__carDbg = { toonify, botoify, buildCarMesh, CARS, THREE, RoomEnvironment, impactAt, wreck, debris, updDebris, pl: () => player };
 window.__zone = { ZONE, startZone, stopZone, pickZoneCenter };
 window.__tp = (x, z, h) => { if (player) { player.x = x; player.z = z; player.h = h; player.vx = player.vz = 0; } };
 window.__sim = n => { for (let i = 0; i < n; i++) tick(1 / 60, false); };
@@ -3495,7 +3556,7 @@ function renderPreviews() {
 }
 function buildMenu() {
   let imgs = {}; try { imgs = renderPreviews(); } catch (e) { }
-  const maxs = { hp: 140, top: 40, accel: 26, mass: 1.5 };
+  const maxs = { hp: 140, top: 42, accel: 26, mass: 1.5 };
   $('cars').innerHTML = CAR_KEYS.map(k => {
     const d = CARS[k], bar = (lbl, v, m) => `<div class="st"><i>${lbl}</i><u><s style="width:${v / m * 100}%"></s></u></div>`;
     return `<div class="card${k === chosen ? ' sel' : ''}" data-k="${k}"><img src="${imgs[k] || ''}" alt=""><b>${d.name}</b><small>${d.desc}</small>${bar('Vida', d.hp, maxs.hp)}${bar('Velocidade', d.top, maxs.top)}${bar('Aceleração', d.accel, maxs.accel)}${bar('Peso', d.mass, maxs.mass)}</div>`;
